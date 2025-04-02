@@ -49,6 +49,30 @@
   - Error recovery and fallback paths
   - Progress tracking and monitoring
 
+### AST Analysis & File Processing
+- **TypeScript Compiler API**: For AST parsing and analysis
+  - Precise source code analysis
+  - Component and import detection
+  - Type information extraction
+  - Full TypeScript syntax support
+
+- **glob**: File pattern matching
+  - Recursive directory traversal
+  - Pattern-based file matching
+  - Used for finding test files
+
+- **fs/promises**: File system operations
+  - Asynchronous file reading/writing
+  - Directory management
+  - Temporary file handling
+
+### Event Handling
+- **EventEmitter**: For event-based communication
+  - Observer pattern implementation
+  - Non-blocking event dispatch
+  - State change notifications
+  - Loosely coupled component communication
+
 ### Type Safety & Validation
 - **Zod**: Runtime type validation
   - Schema definition and validation
@@ -64,6 +88,7 @@
 - Component-level state for UI elements
 - Event-based progress tracking
 - Error state management
+- Reducer pattern for state transitions
 
 ## Development Tools
 - ESLint for code quality

@@ -19,6 +19,9 @@ Options:
   --import-depth <number>  Depth for AST import analysis (default: 1)
   --examples <paths>      Comma-separated list of example tests to use as references
   --context-file <path>   Path to a text file with additional context for the migration
+  --lint-check-cmd <command>  Custom command for lint checking (default: "yarn lint:check")
+  --lint-fix-cmd <command>    Custom command for lint fixing (default: "yarn lint:fix")
+  --ts-check-cmd <command>    Custom command for TypeScript checking (default: "yarn ts:check")
   -h, --help           Show help information
 ```
 
@@ -47,6 +50,9 @@ program
   .option('--import-depth <number>', 'Depth for AST import analysis', '1')
   .option('--examples <paths>', 'Comma-separated list of example tests to use as references')
   .option('--context-file <path>', 'Path to a text file with additional context for the migration')
+  .option('--lint-check-cmd <command>', 'Custom command for lint checking', 'yarn lint:check')
+  .option('--lint-fix-cmd <command>', 'Custom command for lint fixing', 'yarn lint:fix')
+  .option('--ts-check-cmd <command>', 'Custom command for TypeScript checking', 'yarn ts:check')
   .action(handleMigrateCommand);
 
 program.parse();
@@ -68,6 +74,9 @@ export async function handleMigrateCommand(
     importDepth?: string;
     examples?: string;
     contextFile?: string;
+    lintCheckCmd?: string;
+    lintFixCmd?: string;
+    tsCheckCmd?: string;
   }
 ) {
   try {
@@ -79,7 +88,10 @@ export async function handleMigrateCommand(
       pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
       importDepth: parseInt(options.importDepth || '1', 10),
       exampleTests: options.examples ? options.examples.split(',').map(path => path.trim()) : undefined,
-      extraContextFile: options.contextFile
+      extraContextFile: options.contextFile,
+      lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
+      lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
+      tsCheckCmd: options.tsCheckCmd || 'yarn ts:check'
     };
     
     // Log minimal initial message
@@ -173,6 +185,12 @@ unshallow migrate ./src/tests --context-file="./context/testing-guidelines.txt"
 
 # Migrate with both examples and context
 unshallow migrate ./src/tests --import-depth 2 --examples="./examples/Form.test.tsx" --context-file="./context/guidelines.txt"
+
+# Migrate with custom validation commands
+unshallow migrate ./src/tests --lint-check-cmd="npm run lint" --ts-check-cmd="npm run typecheck"
+
+# Migrate with all customizations
+unshallow migrate ./src/tests --lint-check-cmd="npm run lint" --lint-fix-cmd="npm run lint:fix" --ts-check-cmd="npm run typecheck" --import-depth 2
 ```
 
 ## Benefits of Command → Process Pattern

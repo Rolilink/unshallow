@@ -12,6 +12,7 @@ The Migration Service acts as the central orchestration component in the applica
 4. **File Processing**: Coordinates the migration of multiple files through the SequentialMigrationManager
 5. **Error Handling**: Centralizes error handling for the migration process
 6. **Import Analysis**: Configures AST-based import analysis for LLM context
+7. **Validation Command Management**: Passes custom validation commands through to workflow
 
 ## Interface
 
@@ -40,6 +41,11 @@ interface MigrationOptions {
   maxRetries?: number;
   pattern?: string;
   importDepth?: number;
+  exampleTests?: string[];
+  extraContextFile?: string;
+  lintCheckCmd?: string;
+  lintFixCmd?: string;
+  tsCheckCmd?: string;
 }
 
 // Stats interface
@@ -79,6 +85,16 @@ This analysis is critical for providing the LLM with sufficient context about th
 - **importDepth=3+**: Follow import chain even deeper
 
 Deeper analysis provides more context but increases processing time. The default of 1 typically provides a good balance for most migrations.
+
+## Custom Validation Commands
+
+The Migration Service supports customization of validation commands:
+
+1. **Lint Check Command**: Command to run for ESLint checking (default: "yarn lint:check")
+2. **Lint Fix Command**: Command to run for ESLint fixing (default: "yarn lint:fix") 
+3. **TypeScript Check Command**: Command to run for TypeScript validation (default: "yarn ts:check")
+
+These commands are passed through from the CLI to the workflow engine, allowing teams to use their own project-specific validation scripts instead of the defaults.
 
 ## Implementation
 
@@ -182,13 +198,26 @@ export class MigrationService extends EventEmitter {
       // 5. Notify observer that migration is starting
       this.observer.notifyMigrationStarted(filePaths.length);
       
-      // 6. Start the migration process, passing importDepth option
-      await this.manager.startMigration(filePaths, options);
+      // 6. Prepare workflow options including custom commands
+      const workflowOptions = {
+        maxRetries: options?.maxRetries || 5,
+        skipTs: options?.skipTs || false,
+        skipLint: options?.skipLint || false,
+        importDepth: options?.importDepth || 1,
+        exampleTests: options?.exampleTests || [],
+        extraContextFile: options?.extraContextFile,
+        lintCheckCmd: options?.lintCheckCmd || 'yarn lint:check',
+        lintFixCmd: options?.lintFixCmd || 'yarn lint:fix',
+        tsCheckCmd: options?.tsCheckCmd || 'yarn ts:check'
+      };
       
-      // 7. Notify observer that migration completed successfully
+      // 7. Start the migration process with all options
+      await this.manager.startMigration(filePaths, workflowOptions);
+      
+      // 8. Notify observer that migration completed successfully
       this.observer.notifyMigrationCompleted();
       
-      // 8. Return with success (for CLI)
+      // 9. Return with success (for CLI)
       return;
     } catch (error) {
       // Notify observer that migration failed
@@ -241,10 +270,16 @@ export async function handleMigrateCommand(inputPath: string, options: any) {
       skipTs: options.skipTsCheck || false,
       skipLint: options.skipLintCheck || false,
       maxRetries: parseInt(options.maxRetries || '5', 10),
-      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}'
+      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
+      importDepth: parseInt(options.importDepth || '1', 10),
+      exampleTests: options.examples ? options.examples.split(',') : undefined,
+      extraContextFile: options.contextFile,
+      lintCheckCmd: options.lintCheckCmd,
+      lintFixCmd: options.lintFixCmd,
+      tsCheckCmd: options.tsCheckCmd
     };
     
-    // Start the migration service - this handles file expansion and everything else
+    // Start the migration service
     await migrationService.migrateFiles(inputPath, config);
     
     // Exit with success code
@@ -295,7 +330,7 @@ sequenceDiagram
         
         %% LangGraph processing
         Manager->>LangGraph: create workflow for file
-        Manager->>LangGraph: provide component context
+        Manager->>LangGraph: provide component context and commands
         LangGraph->>LangGraph: process file nodes
         
         %% State changes and event flow
@@ -335,7 +370,7 @@ sequenceDiagram
    - Build component context for LLM
 
 3. **Migration Process**
-   - Manager starts migration with component context
+   - Manager starts migration with component context and custom commands
    - Each file is processed through LangGraph
    - State changes are observed and relayed
    - UI is updated with progress

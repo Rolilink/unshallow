@@ -70,6 +70,13 @@ interface LangGraphState {
       lint: number;
     };
     maxRetries: number;
+    
+    // Custom validation commands
+    commands: {
+      lintCheck: string;
+      lintFix: string;
+      tsCheck: string;
+    };
   }
 }
 
@@ -244,8 +251,180 @@ function extractCodeFromMarkdown(markdown: string): string {
 }
 ```
 
-### 5. Remaining Nodes
-The remaining nodes handle test execution, TypeScript validation, linting, and any necessary refactoring.
+### 5. TypeScript Validation
+Runs the TypeScript checker using the configured command to verify the migrated test is type-safe.
+
+```typescript
+// nodes/tsValidation.ts
+import { StateGraph } from "langchain/graphs";
+import { exec } from "child_process";
+import { promisify } from "util";
+import * as fs from "fs/promises";
+import * as path from "path";
+
+const execAsync = promisify(exec);
+
+export const tsValidationNode = {
+  invoke: async (state) => {
+    const { file } = state;
+    
+    // Skip if configured to skip TS checks
+    if (state.skipTs) {
+      return {
+        file: {
+          ...file,
+          tsCheck: { success: true, errors: [] },
+          currentStep: "TS_CHECK_SKIPPED"
+        }
+      };
+    }
+    
+    // Create temporary file for checking
+    const tempDir = path.dirname(file.path);
+    const tempFile = file.tempPath || path.join(tempDir, `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`);
+    
+    try {
+      // Write the RTL test to the temp file
+      await fs.writeFile(tempFile, file.rtlTest);
+      
+      // Run TypeScript check with custom command if provided
+      const tsCheckCmd = file.commands?.tsCheck || 'yarn ts:check';
+      const { stdout, stderr } = await execAsync(`${tsCheckCmd} ${tempFile}`);
+      
+      if (stderr && stderr.toLowerCase().includes('error')) {
+        // TS check failed
+        return {
+          file: {
+            ...file,
+            tsCheck: {
+              success: false,
+              errors: stderr.split('\n').filter(line => line.includes('error'))
+            },
+            retries: {
+              ...file.retries,
+              ts: file.retries.ts + 1
+            },
+            currentStep: "TS_CHECK_FAILED"
+          }
+        };
+      }
+      
+      // TS check succeeded
+      return {
+        file: {
+          ...file,
+          tsCheck: {
+            success: true,
+            errors: []
+          },
+          currentStep: "TS_CHECK_PASSED"
+        }
+      };
+    } catch (error) {
+      // Error running TS check
+      return {
+        file: {
+          ...file,
+          tsCheck: {
+            success: false,
+            errors: [error.message]
+          },
+          retries: {
+            ...file.retries,
+            ts: file.retries.ts + 1
+          },
+          currentStep: "TS_CHECK_ERROR"
+        }
+      };
+    }
+  }
+};
+```
+
+### 6. Lint Checking and Fixing
+Runs ESLint check and fix using the configured commands to ensure the migrated test follows coding standards.
+
+```typescript
+// nodes/lintCheck.ts
+import { StateGraph } from "langchain/graphs";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
+
+export const lintCheckNode = {
+  invoke: async (state) => {
+    const { file } = state;
+    
+    // Skip if configured to skip lint checks
+    if (state.skipLint) {
+      return {
+        file: {
+          ...file,
+          lintCheck: { success: true, errors: [] },
+          currentStep: "LINT_CHECK_SKIPPED"
+        }
+      };
+    }
+    
+    try {
+      // Run lint fix first using custom command if provided
+      const lintFixCmd = file.commands?.lintFix || 'yarn lint:fix';
+      await execAsync(`${lintFixCmd} ${file.tempPath}`);
+      
+      // Run lint check using custom command if provided
+      const lintCheckCmd = file.commands?.lintCheck || 'yarn lint:check';
+      const { stdout, stderr } = await execAsync(`${lintCheckCmd} ${file.tempPath}`);
+      
+      if (stderr && stderr.includes('error')) {
+        // Lint check failed
+        return {
+          file: {
+            ...file,
+            lintCheck: {
+              success: false,
+              errors: stderr.split('\n').filter(line => line.includes('error'))
+            },
+            retries: {
+              ...file.retries,
+              lint: file.retries.lint + 1
+            },
+            currentStep: "LINT_CHECK_FAILED"
+          }
+        };
+      }
+      
+      // Lint check succeeded
+      return {
+        file: {
+          ...file,
+          lintCheck: {
+            success: true,
+            errors: []
+          },
+          currentStep: "LINT_CHECK_PASSED"
+        }
+      };
+    } catch (error) {
+      // Error running lint check
+      return {
+        file: {
+          ...file,
+          lintCheck: {
+            success: false,
+            errors: [error.message]
+          },
+          retries: {
+            ...file.retries,
+            lint: file.retries.lint + 1
+          },
+          currentStep: "LINT_CHECK_ERROR"
+        }
+      };
+    }
+  }
+};
+```
 
 ## LangGraph Configuration
 
@@ -283,7 +462,12 @@ export function createLangGraphWorkflow(
           ts: 0,
           lint: 0
         },
-        maxRetries: options.maxRetries || 5
+        maxRetries: options.maxRetries || 5,
+        commands: {
+          lintCheck: options.lintCheckCmd || 'yarn lint:check',
+          lintFix: options.lintFixCmd || 'yarn lint:fix',
+          tsCheck: options.tsCheckCmd || 'yarn ts:check'
+        }
       }
     }
   });
@@ -339,7 +523,10 @@ export class SequentialMigrationManager {
       {
         maxRetries: options?.maxRetries || 5,
         skipTs: options?.skipTs || false,
-        skipLint: options?.skipLint || false
+        skipLint: options?.skipLint || false,
+        lintCheckCmd: options?.lintCheckCmd || 'yarn lint:check',
+        lintFixCmd: options?.lintFixCmd || 'yarn lint:fix',
+        tsCheckCmd: options?.tsCheckCmd || 'yarn ts:check'
       }
     );
     
@@ -373,4 +560,14 @@ The enriched context from the ContextEnricher significantly improves the LLM's m
 4. **Testing Context**: The LLM can see how the component was intended to be used
 5. **Simpler Structure**: The straightforward structure makes it easy for the LLM to navigate
 
-This context is especially valuable for complex components with unique usage patterns that would otherwise be difficult for the LLM to infer from the test file alone. 
+This context is especially valuable for complex components with unique usage patterns that would otherwise be difficult for the LLM to infer from the test file alone.
+
+## Custom Validation Command Benefits
+
+The ability to customize validation commands offers several advantages:
+
+1. **Project Compatibility**: Works with projects using different build tools (npm, yarn, pnpm, etc.)
+2. **CI Integration**: Allows specifying commands that will work in CI environments
+3. **Specialized Scripts**: Supports projects with custom validation scripts
+4. **Performance Optimization**: Teams can use optimized versions of validation commands
+5. **Flexibility**: Can adapt to monorepo setups or other non-standard project structures 
