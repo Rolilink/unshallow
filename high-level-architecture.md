@@ -18,6 +18,7 @@ graph TD
         MS[Migration Service]
         SMM[SequentialMigrationManager]
         LGO[LangGraphObserver]
+        CE[ContextEnricher]
     end
     
     subgraph "Workflow Layer"
@@ -46,6 +47,10 @@ graph TD
     MS -->|"configures"| MContext
     MS -->|"creates"| SMM
     MS -->|"sets up"| LGO
+    MS -->|"uses"| CE
+    
+    %% Context enrichment flow
+    CE -->|"analyzes imports"| SMM
     
     %% Migration process flow
     SMM -->|"manages"| LG
@@ -64,11 +69,13 @@ graph TD
     classDef central fill:#f96,stroke:#333,stroke-width:2px;
     classDef primary fill:#bbf,stroke:#33f,stroke-width:1px;
     classDef secondary fill:#ddf,stroke:#33f,stroke-width:1px;
+    classDef highlight fill:#fdf,stroke:#939,stroke-width:1px;
     
     %% Apply styles to highlight key components
     class MS central;
-    class SMM,LGO,MContext primary;
+    class CE,SMM,LGO,MContext primary;
     class LG,RC secondary;
+    class CE highlight;
 ```
 
 ## Process Flow
@@ -78,18 +85,27 @@ sequenceDiagram
     participant User
     participant CLI
     participant Service as Migration Service
+    participant Context as ContextEnricher
     participant UI as React UI
     participant Manager as Sequential Manager
     participant LangGraph
     
     User->>CLI: migrate command
-    CLI->>Service: migrateFiles()
+    CLI->>Service: migrateFiles(inputPath, config)
     
     Service->>UI: initialize React application
-    Service->>Manager: set up migration manager
-    Service->>Manager: start migration process
     
-    Manager->>LangGraph: process files one by one
+    %% Context enrichment process
+    Service->>Context: enrichContext(testFile, importDepth)
+    Context->>Context: parse AST
+    Context->>Context: identify components
+    Context->>Context: resolve imports recursively
+    Context-->>Service: return enriched context
+    
+    Service->>Manager: set up migration manager
+    Service->>Manager: process file with context
+    
+    Manager->>LangGraph: process file with component context
     LangGraph->>UI: update UI state via observer
     
     Manager-->>Service: report completion
@@ -100,7 +116,8 @@ sequenceDiagram
 This flow illustrates how:
 1. CLI only initiates the process
 2. Migration Service initializes the UI and manages the entire process
-3. The UI is updated directly from the Migration Service
+3. ContextEnricher provides rich component information through AST analysis
+4. LangGraph uses this context for better migration results
 
 ## Key Components
 
@@ -115,26 +132,37 @@ This layer serves as a minimal entry point, with no UI responsibilities.
 
 - **Service API**: Central service that receives CLI commands and orchestrates everything
 - **UI Initialization**: Starts the React application when migration begins
+- **Context Management**: Uses ContextEnricher to analyze test files
 - **Process Management**: Coordinates the entire migration process
 
 This layer serves as the core of the application, responsible for initializing and managing all other components.
 
-### 3. Workflow Layer (LangGraph Engine)
+### 3. Context Enricher
+
+- **AST Analysis**: Parses TypeScript/React test files using the TypeScript compiler API
+- **Import Resolution**: Recursively analyzes imports at the specified depth
+- **Component Detection**: Identifies which components are being tested
+- **Context Building**: Creates a structured representation of components and their relationships
+
+This specialized component provides the LLM with rich context about the components being tested.
+
+### 4. Workflow Layer (LangGraph Engine)
 
 - **LangGraph**: Handles the complex workflow of migrating a single file through various processing steps
 - **File Processing Nodes**: Individual processing steps like RTL conversion, linting, and TypeScript checking
+- **AST Import Analysis**: Parses and analyzes component imports to provide context for LLM
 - **LLM Integration**: Nodes that leverage LLMs for code conversion and refactoring
 
 This layer operates on a per-file basis, processing one file at a time through the migration workflow.
 
-### 4. Orchestration Layer
+### 5. Orchestration Layer
 
 - **SequentialMigrationManager**: Coordinates the sequential processing of multiple files
 - **LangGraphObserver**: Monitors LangGraph state changes and emits events
 
 This layer manages the processing of multiple files and provides state updates to the UI.
 
-### 5. State Management Layer
+### 6. State Management Layer
 
 - **MigrationContext**: Provides application-wide state using React Context
 - **migrationReducer**: Manages state transitions based on observed events
@@ -142,7 +170,7 @@ This layer manages the processing of multiple files and provides state updates t
 
 This layer maintains the state for the React UI, providing a real-time view of the migration.
 
-### 6. React UI Layer
+### 7. React UI Layer
 
 - **React Components**: UI components that display migration status and results
 - **useContext Hooks**: Component-level hooks that access the shared state
@@ -161,19 +189,23 @@ This layer presents the migration process to the user but is initialized and con
 - Initialize React UI
 - Set up state management
 - Create and configure SequentialMigrationManager
+- Utilize ContextEnricher for test analysis
 - Start the migration process
 - Relay events between components
 
+### ContextEnricher
+- Parse test files using AST
+- Detect components under test
+- Analyze imports recursively
+- Extract component props and types
+- Build structured context for LLM
+
 ### SequentialMigrationManager
 - Process files one by one
+- Utilize enriched context for better migrations
 - Manage LangGraph instances
 - Track migration progress
 - Report status to Migration Service
-
-### React UI
-- Display migration progress
-- Show file statuses
-- Visualize results
 
 ## Key Design Decisions
 

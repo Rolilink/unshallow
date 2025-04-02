@@ -16,6 +16,9 @@ Options:
   --skip-lint-check    Skip ESLint checking
   --max-retries <number>  Maximum LLM retries (default: 5)
   --pattern <glob>     Test file pattern (default: "**/*.{test,spec}.{ts,tsx}")
+  --import-depth <number>  Depth for AST import analysis (default: 1)
+  --examples <paths>      Comma-separated list of example tests to use as references
+  --context-file <path>   Path to a text file with additional context for the migration
   -h, --help           Show help information
 ```
 
@@ -41,6 +44,9 @@ program
   .option('--skip-lint-check', 'Skip ESLint checking')
   .option('--max-retries <number>', 'Maximum LLM retries', '5')
   .option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx}')
+  .option('--import-depth <number>', 'Depth for AST import analysis', '1')
+  .option('--examples <paths>', 'Comma-separated list of example tests to use as references')
+  .option('--context-file <path>', 'Path to a text file with additional context for the migration')
   .action(handleMigrateCommand);
 
 program.parse();
@@ -59,6 +65,9 @@ export async function handleMigrateCommand(
     skipLintCheck?: boolean;
     maxRetries?: string;
     pattern?: string;
+    importDepth?: string;
+    examples?: string;
+    contextFile?: string;
   }
 ) {
   try {
@@ -67,8 +76,14 @@ export async function handleMigrateCommand(
       skipTs: options.skipTsCheck || false,
       skipLint: options.skipLintCheck || false,
       maxRetries: parseInt(options.maxRetries || '5', 10),
-      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}'
+      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
+      importDepth: parseInt(options.importDepth || '1', 10),
+      exampleTests: options.examples ? options.examples.split(',').map(path => path.trim()) : undefined,
+      extraContextFile: options.contextFile
     };
+    
+    // Log minimal initial message
+    console.log(`Starting migration process for ${inputPath}`);
     
     // Start the migration service - all file handling happens inside the service
     await migrationService.migrateFiles(inputPath, config);
@@ -76,6 +91,8 @@ export async function handleMigrateCommand(
     // Exit with success code when completed
     process.exit(0);
   } catch (error) {
+    // Log minimal error and exit
+    console.error('Migration failed');
     process.exit(1);
   }
 }
@@ -144,6 +161,18 @@ unshallow migrate ./src/tests --skip-ts-check --max-retries 3
 
 # Migrate with custom pattern
 unshallow migrate ./src/tests --pattern "**/*Test.{ts,tsx}"
+
+# Migrate with deeper import analysis for better context
+unshallow migrate ./src/tests --import-depth 2
+
+# Migrate with example tests for reference
+unshallow migrate ./src/tests --examples="./examples/Button.test.tsx,./examples/Dropdown.test.tsx"
+
+# Migrate with additional context from a file
+unshallow migrate ./src/tests --context-file="./context/testing-guidelines.txt"
+
+# Migrate with both examples and context
+unshallow migrate ./src/tests --import-depth 2 --examples="./examples/Form.test.tsx" --context-file="./context/guidelines.txt"
 ```
 
 ## Benefits of Command → Process Pattern

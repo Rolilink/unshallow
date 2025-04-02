@@ -1,738 +1,376 @@
-# LangGraph Workflow Design
+# LangGraph Workflow
+
+## Overview
+
+The LangGraph workflow defines the process of migrating a single test file from Enzyme to React Testing Library. The workflow operates as a state machine with multiple nodes that handle different aspects of the migration process, from AST analysis to LLM-based conversion to validation steps.
 
 ## Workflow Architecture
 
 ```mermaid
 graph TD
-    START[Start] --> INIT[Initialize]
-    INIT --> LLM_CONVERT[LLM Convert to RTL]
-    LLM_CONVERT --> RTL_TEST[Run RTL Test]
+    Start[Start] --> LoadTestFile[Load Test File]
+    LoadTestFile --> ApplyContext[Apply Enriched Context]
+    ApplyContext --> AnalyzeTest[Analyze Test Structure]
+    AnalyzeTest --> ConvertToRTL[Convert to RTL]
+    ConvertToRTL --> RunTest[Run Test]
     
-    RTL_TEST -->|Success| LINT_FIX[Lint Fix]
-    RTL_TEST -->|Fail| LLM_RTL[LLM Refactor RTL]
-    LLM_RTL --> |Max Retries| FAIL_RTL[RTL Failed]
-    LLM_RTL --> RTL_TEST
+    RunTest -->|Success| ValidateTS[TypeScript Validation]
+    RunTest -->|Failure| RefactorRTL[Refactor RTL]
     
-    LINT_FIX --> LINT_CHECK[Lint Check]
-    LINT_CHECK -->|Success| TS_CHECK[TypeScript Check]
-    LINT_CHECK -->|Fail| LLM_LINT[LLM Refactor Lint]
-    LLM_LINT --> |Max Retries| FAIL_LINT[Lint Failed]
-    LLM_LINT --> LINT_CHECK
+    RefactorRTL --> RunTest
     
-    TS_CHECK -->|Success| SUCCESS[Success]
-    TS_CHECK -->|Fail| LLM_TS[LLM Refactor TypeScript]
-    LLM_TS --> |Max Retries| FAIL_TS[TS Failed]
-    LLM_TS --> TS_CHECK
+    ValidateTS -->|Success| LintCheck[Lint Check]
+    ValidateTS -->|Failure| RefactorTS[Refactor TS]
+    
+    RefactorTS --> ValidateTS
+    
+    LintCheck -->|Success| Success[Success]
+    LintCheck -->|Failure| RefactorLint[Refactor Lint]
+    
+    RefactorLint --> LintCheck
+    
+    classDef contextNode fill:#f9f,stroke:#333;
+    class ApplyContext contextNode;
 ```
 
 ## State Definition
 
-```typescript
-// Core state passed between nodes
-interface FileState {
-  // File information
-  path: string;
-  tempPath: string;
-  attemptPath: string;
-  
-  // Content
-  originalContent: string;
-  currentContent: string;
-  
-  // Status tracking - simplified
-  status: "RUNNING" | "COMPLETE" | "FAILED";
-  currentStep: string;
-  
-  // Retry tracking
-  retries: {
-    rtl: number;
-    lint: number;
-    ts: number;
-  };
-  maxRetries: number;
-  
-  // Error information
-  error: {
-    step: string;
-    message: string;
-    details?: string;
-    timestamp: number;
-  } | null;
-  
-  // Node-specific state
-  rtlTest: {
-    passed: boolean;
-    output: string;
-  } | null;
-  
-  lintCheck: {
-    passed: boolean;
-    message: string;
-    attempted: boolean;  // Track if lint check has been attempted
-  } | null;
-  
-  tsCheck: {
-    passed: boolean;
-    message: string;
-  } | null;
-}
-```
-
-## Node Implementations
-
-### 1. Initialize Node
+The LangGraph state includes the enriched context from the ContextEnricher:
 
 ```typescript
-const initializeNode = async (state: FileState): Promise<FileState> => {
-  // Create temp file
-  const tempContent = await fs.readFile(state.path, 'utf-8');
-  await fs.writeFile(state.tempPath, tempContent, 'utf-8');
-  
-  return {
-    ...state,
-    originalContent: tempContent,
-    currentContent: tempContent,
-    status: "RUNNING",
-    currentStep: "INITIALIZE",
+interface LangGraphState {
+  file: {
+    path: string;
+    content: string;
+    tempPath?: string;
+    outputPath?: string;
+    status: 'pending' | 'in-progress' | 'success' | 'failed';
+    currentStep: string;
+    error?: Error;
+    
+    // Enriched context from ContextEnricher
+    enrichedContext: EnrichedContext;
+    
+    // Migration outputs
+    originalTest: string;
+    rtlTest?: string;
+    tsCheck?: {
+      success: boolean;
+      errors: string[];
+    };
+    lintCheck?: {
+      success: boolean;
+      errors: string[];
+    };
+    
+    // Retry counters
     retries: {
-      rtl: 0,
-      lint: 0,
-      ts: 0
+      rtl: number;
+      ts: number;
+      lint: number;
+    };
+    maxRetries: number;
+  }
+}
+
+interface EnrichedContext {
+  testedComponents: Component[];
+  importChain: ImportNode[];
+  contextSummary: string;
+}
+```
+
+## Key Workflow Nodes
+
+### 1. Load Test File
+Loads the test file content and initializes the state.
+
+### 2. Apply Enriched Context
+Integrates the context information from the ContextEnricher into the prompt context for the LLM.
+
+```typescript
+// nodes/applyContext.ts
+import { StateGraph } from "langchain/graphs";
+
+export const applyContextNode = {
+  invoke: async (state) => {
+    const { file } = state;
+    const { context } = file;
+    
+    // Create a summary of the component for the LLM
+    let componentContext = "";
+    
+    // Add information about the tested component
+    componentContext += `\n## Tested Component: ${context.componentName}\n\n`;
+    componentContext += "```typescript\n";
+    componentContext += context.componentCode;
+    componentContext += "\n```\n\n";
+    
+    // Add information about related imports
+    componentContext += `## Related Imports\n\n`;
+    
+    for (const [relativePath, content] of Object.entries(context.imports)) {
+      componentContext += `### ${relativePath}\n\n`;
+      componentContext += "```typescript\n";
+      
+      // Limit size to avoid token issues
+      const truncatedContent = content.length > 1000 
+        ? content.substring(0, 1000) + "\n// ... (truncated)"
+        : content;
+        
+      componentContext += truncatedContent;
+      componentContext += "\n```\n\n";
     }
-  };
+    
+    // Add example tests if available
+    if (Object.keys(context.examples).length > 0) {
+      componentContext += `## Example Migrations\n\n`;
+      componentContext += `These are examples of similar tests that have been migrated from Enzyme to RTL:\n\n`;
+      
+      for (const [examplePath, exampleContent] of Object.entries(context.examples)) {
+        componentContext += `### ${examplePath}\n\n`;
+        componentContext += "```typescript\n";
+        
+        // Limit size to avoid token issues
+        const truncatedExample = exampleContent.length > 1500 
+          ? exampleContent.substring(0, 1500) + "\n// ... (truncated)"
+          : exampleContent;
+          
+        componentContext += truncatedExample;
+        componentContext += "\n```\n\n";
+      }
+    }
+    
+    // Add extra context if available
+    if (context.extraContext && context.extraContext.trim().length > 0) {
+      componentContext += `## Additional Context\n\n`;
+      componentContext += context.extraContext;
+      componentContext += "\n\n";
+    }
+    
+    // Update the file state with this context
+    return {
+      file: {
+        ...file,
+        componentContext,
+        currentStep: "APPLY_CONTEXT"
+      }
+    };
+  }
 };
 ```
 
-### 2. LLM Convert to RTL Node
+### 3. Analyze Test Structure
+Uses the enriched context to understand the test structure, including which components are being tested and how.
+
+### 4. Convert to RTL
+Performs the core migration using the LLM, with the enriched context as part of the prompt.
 
 ```typescript
-const llmConvertToRTLNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Create prompt for initial conversion
-    const prompt = createInitialConversionPrompt({
-      enzymeTest: state.originalContent
+// nodes/convertToRTL.ts
+import { StateGraph } from "langchain/graphs";
+import { ChatOpenAI } from "langchain/chat_models/openai";
+import { HumanMessage, SystemMessage } from "langchain/schema";
+
+export const convertToRTLNode = {
+  invoke: async (state) => {
+    const { file } = state;
+    const { content, componentContext } = file;
+    
+    // Configure the LLM
+    const llm = new ChatOpenAI({
+      temperature: 0.2,
+      modelName: "gpt-4",
     });
     
-    // Call LLM for conversion
-    const rtlContent = await callLLM(prompt);
-    
-    // Write to temp file
-    await fs.writeFile(state.tempPath, rtlContent, 'utf-8');
-    
-    return {
-      ...state,
-      currentContent: rtlContent,
-      currentStep: "LLM_CONVERT_TO_RTL"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_CONVERT_TO_RTL",
-        message: "Failed to convert to RTL using LLM",
-        details: error.message,
-        timestamp: Date.now()
-      }
-    };
-  }
-};
-```
+    // Build the system prompt with enriched context
+    const systemPrompt = `
+You are an expert in migrating Enzyme tests to React Testing Library.
+You will be provided with an Enzyme test file and detailed context about the components being tested.
 
-### 3. Run RTL Test Node
+## Component Context
+${componentContext}
 
-```typescript
-const runRTLTestNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Run the test file to see if it executes without errors
-    const testResult = await runTest(state.tempPath);
-    
-    return {
-      ...state,
-      rtlTest: {
-        passed: testResult.success,
-        output: testResult.output
-      },
-      currentStep: "RUN_RTL_TEST"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      rtlTest: {
-        passed: false,
-        output: error.message
-      },
-      currentStep: "RUN_RTL_TEST"
-    };
-  }
-};
-```
-
-### 4. LLM Refactor RTL Node
-
-```typescript
-const llmRefactorRTLNode = async (state: FileState): Promise<FileState> => {
-  // Check retry limit
-  if (state.retries.rtl >= state.maxRetries) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_REFACTOR_RTL",
-        message: "Max retries reached for RTL conversion",
-        details: `Failed after ${state.retries.rtl} attempts`,
-        timestamp: Date.now()
-      }
-    };
-  }
-  
-  try {
-    // Create prompt with test error information
-    const prompt = createRTLRefactorPrompt({
-      original: state.originalContent,
-      current: state.currentContent,
-      testOutput: state.rtlTest?.output || ""
-    });
-    
-    // Call LLM for refactoring
-    const refactoredContent = await callLLM(prompt);
-    
-    // Write to temp file
-    await fs.writeFile(state.tempPath, refactoredContent, 'utf-8');
-    
-    return {
-      ...state,
-      currentContent: refactoredContent,
-      retries: {
-        ...state.retries,
-        rtl: state.retries.rtl + 1
-      },
-      currentStep: "LLM_REFACTOR_RTL"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_REFACTOR_RTL",
-        message: "Failed to refactor RTL with LLM",
-        details: error.message,
-        timestamp: Date.now()
-      }
-    };
-  }
-};
-```
-
-### 5. Lint Fix Node
-
-```typescript
-const lintFixNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Run ESLint with --fix option
-    const fixedContent = await runLintFix(state.tempPath);
-    
-    // Update temp file
-    await fs.writeFile(state.tempPath, fixedContent, 'utf-8');
-    
-    return {
-      ...state,
-      currentContent: fixedContent,
-      currentStep: "LINT_FIX"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      currentStep: "LINT_FIX",
-      // Don't fail here, let the check determine if it's a failure
-    };
-  }
-};
-```
-
-### 6. Lint Check Node
-
-```typescript
-const lintCheckNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Run ESLint without --fix
-    const lintResult = await runLintCheck(state.tempPath);
-    
-    return {
-      ...state,
-      lintCheck: {
-        passed: lintResult.errorCount === 0,
-        message: lintResult.output,
-        attempted: true
-      },
-      currentStep: "LINT_CHECK"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      lintCheck: {
-        passed: false,
-        message: error.message,
-        attempted: true
-      },
-      currentStep: "LINT_CHECK"
-    };
-  }
-};
-```
-
-### 7. LLM Refactor Lint Node
-
-```typescript
-const llmRefactorLintNode = async (state: FileState): Promise<FileState> => {
-  // Check retry limit
-  if (state.retries.lint >= state.maxRetries) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_REFACTOR_LINT",
-        message: "Max retries reached for lint fixes",
-        details: `Failed after ${state.retries.lint} attempts`,
-        timestamp: Date.now()
-      }
-    };
-  }
-  
-  try {
-    // Create prompt with lint issues
-    const prompt = createLintRefactorPrompt({
-      content: state.currentContent,
-      lintMessage: state.lintCheck?.message || ""
-    });
-    
-    // Call LLM for refactoring
-    const refactoredContent = await callLLM(prompt);
-    
-    // Write to temp file
-    await fs.writeFile(state.tempPath, refactoredContent, 'utf-8');
-    
-    return {
-      ...state,
-      currentContent: refactoredContent,
-      retries: {
-        ...state.retries,
-        lint: state.retries.lint + 1
-      },
-      currentStep: "LLM_REFACTOR_LINT"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_REFACTOR_LINT",
-        message: "Failed to refactor for lint issues with LLM",
-        details: error.message,
-        timestamp: Date.now()
-      }
-    };
-  }
-};
-```
-
-### 8. TypeScript Check Node
-
-```typescript
-const tsCheckNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Run TypeScript compiler check
-    const tsResult = await runTypeScriptCheck(state.tempPath);
-    
-    return {
-      ...state,
-      tsCheck: {
-        passed: tsResult.errorCount === 0,
-        message: tsResult.output
-      },
-      currentStep: "TS_CHECK"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      tsCheck: {
-        passed: false,
-        message: error.message
-      },
-      currentStep: "TS_CHECK"
-    };
-  }
-};
-```
-
-### 9. LLM Refactor TypeScript Node
-
-```typescript
-const llmRefactorTSNode = async (state: FileState): Promise<FileState> => {
-  // Check retry limit
-  if (state.retries.ts >= state.maxRetries) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_REFACTOR_TS",
-        message: "Max retries reached for TypeScript fixes",
-        details: `Failed after ${state.retries.ts} attempts`,
-        timestamp: Date.now()
-      }
-    };
-  }
-  
-  try {
-    // Create prompt with TypeScript issues
-    const prompt = createTSRefactorPrompt({
-      content: state.currentContent,
-      tsMessage: state.tsCheck?.message || ""
-    });
-    
-    // Call LLM for refactoring
-    const refactoredContent = await callLLM(prompt);
-    
-    // Write to temp file
-    await fs.writeFile(state.tempPath, refactoredContent, 'utf-8');
-    
-    return {
-      ...state,
-      currentContent: refactoredContent,
-      retries: {
-        ...state.retries,
-        ts: state.retries.ts + 1
-      },
-      currentStep: "LLM_REFACTOR_TS"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "LLM_REFACTOR_TS",
-        message: "Failed to refactor for TypeScript issues with LLM",
-        details: error.message,
-        timestamp: Date.now()
-      }
-    };
-  }
-};
-```
-
-### 10. Success Node
-
-```typescript
-const successNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Replace original file with temp file
-    await fs.rename(state.tempPath, state.path);
-    
-    return {
-      ...state,
-      status: "COMPLETE",
-      currentStep: "SUCCESS"
-    };
-  } catch (error) {
-    return {
-      ...state,
-      status: "FAILED",
-      error: {
-        step: "SUCCESS",
-        message: "Failed to replace original file",
-        details: error.message,
-        timestamp: Date.now()
-      }
-    };
-  }
-};
-```
-
-### 11. Failure Node
-
-```typescript
-const failureNode = async (state: FileState): Promise<FileState> => {
-  try {
-    // Save failed attempt to .attempts folder
-    await ensureDirectoryExists(path.dirname(state.attemptPath));
-    await fs.writeFile(state.attemptPath, state.currentContent, 'utf-8');
-    
-    // Clean up temp file
-    await fs.unlink(state.tempPath).catch(() => {});
-    
-    return {
-      ...state,
-      status: "FAILED",
-      currentStep: "FAILED"
-    };
-  } catch (error) {
-    // Even if saving the attempt fails, keep the failure state
-    return {
-      ...state,
-      status: "FAILED",
-      currentStep: "FAILED",
-      // Don't overwrite the original error that caused the failure
-    };
-  }
-};
-```
-
-## LLM Prompts
-
-### 1. Initial Conversion Prompt
-
-```typescript
-function createInitialConversionPrompt(params: {
-  enzymeTest: string;
-}): string {
-  return `
-You are an expert React Testing Library developer. 
-I am migrating Enzyme tests to React Testing Library.
-
-Here is an Enzyme test that needs to be converted to React Testing Library:
-\`\`\`typescript
-${params.enzymeTest}
-\`\`\`
-
-Please convert this test to use React Testing Library instead of Enzyme.
-Follow these best practices:
-1. Replace shallow/mount with render from @testing-library/react
-2. Replace enzyme selectors with @testing-library/react queries (getBy, findBy, queryBy)
-3. Replace enzyme assertions with @testing-library/jest-dom matchers
-4. Handle async operations with waitFor or findBy queries
+## Guidelines for migration:
+1. Replace Enzyme's shallow/mount with React Testing Library's render
+2. Replace Enzyme selectors with RTL queries
+3. Replace Enzyme interactions with RTL's fireEvent or userEvent
+4. Update assertions to match RTL's philosophy
 5. Maintain the same test coverage and assertions
-6. Preserve imports for components under test
-7. Add necessary imports for React Testing Library
-
-Respond ONLY with the converted code. No explanations.
+6. Keep the same test structure and descriptions
 `;
+
+    try {
+      // Call the LLM with the Enzyme test and context
+      const result = await llm.call([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(`Here is the Enzyme test to migrate to React Testing Library:
+\`\`\`typescript
+${content}
+\`\`\`
+
+Please convert this test to use React Testing Library, maintaining the same behavior.`)
+      ]);
+      
+      // Extract the RTL test from the response
+      const rtlTest = extractCodeFromMarkdown(result.content);
+      
+      // Update the state with the converted test
+      return {
+        file: {
+          ...file,
+          rtlTest,
+          currentStep: "CONVERT_TO_RTL"
+        }
+      };
+    } catch (error) {
+      return {
+        file: {
+          ...file,
+          error,
+          status: "failed",
+          currentStep: "FAILED"
+        }
+      };
+    }
+  }
+};
+
+// Helper to extract code blocks from markdown
+function extractCodeFromMarkdown(markdown: string): string {
+  const codeBlockRegex = /```(?:typescript|tsx|javascript|jsx)?\n([\s\S]*?)```/;
+  const match = markdown.match(codeBlockRegex);
+  return match ? match[1] : markdown;
 }
 ```
 
-### 2. RTL Refactor Prompt
-
-```typescript
-function createRTLRefactorPrompt(params: {
-  original: string;
-  current: string;
-  testOutput: string;
-}): string {
-  return `
-You are an expert React Testing Library developer. 
-I am migrating Enzyme tests to React Testing Library.
-
-Original Enzyme test:
-\`\`\`typescript
-${params.original}
-\`\`\`
-
-Current conversion attempt:
-\`\`\`typescript
-${params.current}
-\`\`\`
-
-Test error output:
-\`\`\`
-${params.testOutput}
-\`\`\`
-
-Please refactor the current conversion to fix the test errors. 
-Follow these best practices:
-1. Replace shallow/mount with render from @testing-library/react
-2. Replace enzyme selectors with @testing-library/react queries (getBy, findBy, queryBy)
-3. Replace enzyme assertions with @testing-library/jest-dom matchers
-4. Handle async operations with waitFor or findBy queries
-5. Maintain the same test coverage and assertions
-
-Respond ONLY with the corrected code. No explanations.
-`;
-}
-```
-
-### 3. Lint Refactor Prompt
-
-```typescript
-function createLintRefactorPrompt(params: {
-  content: string;
-  lintMessage: string;
-}): string {
-  return `
-You are an expert JavaScript and React developer.
-I need to fix ESLint issues in this React Testing Library test file.
-
-Current test file:
-\`\`\`typescript
-${params.content}
-\`\`\`
-
-ESLint output:
-\`\`\`
-${params.lintMessage}
-\`\`\`
-
-Please refactor the code to fix all lint issues while preserving the test logic.
-Follow these guidelines:
-1. Fix all lint issues
-2. Maintain the same testing behavior
-3. Follow React Testing Library best practices
-4. Use modern JavaScript/TypeScript syntax
-
-Respond ONLY with the corrected code. No explanations.
-`;
-}
-```
-
-### 4. TypeScript Refactor Prompt
-
-```typescript
-function createTSRefactorPrompt(params: {
-  content: string;
-  tsMessage: string;
-}): string {
-  return `
-You are an expert TypeScript developer.
-I need to fix TypeScript issues in this React Testing Library test file.
-
-Current test file:
-\`\`\`typescript
-${params.content}
-\`\`\`
-
-TypeScript errors:
-\`\`\`
-${params.tsMessage}
-\`\`\`
-
-Please refactor the code to fix all TypeScript issues while preserving the test logic.
-Follow these guidelines:
-1. Fix all type errors
-2. Add proper type annotations where missing
-3. Maintain the same testing behavior
-4. Follow React Testing Library typing conventions
-5. Import any necessary types
-
-Respond ONLY with the corrected code. No explanations.
-`;
-}
-```
+### 5. Remaining Nodes
+The remaining nodes handle test execution, TypeScript validation, linting, and any necessary refactoring.
 
 ## LangGraph Configuration
 
 ```typescript
+// workflow/langGraphWorkflow.ts
 import { StateGraph } from "langchain/graphs";
+import { loadTestFileNode } from "./nodes/loadTestFile";
+import { applyContextNode } from "./nodes/applyContext";
+import { analyzeTestNode } from "./nodes/analyzeTest";
+import { convertToRTLNode } from "./nodes/convertToRTL";
+// Import other nodes...
 
-export async function createMigrationGraph() {
-  // Initialize the graph
+export function createLangGraphWorkflow(
+  testFilePath: string,
+  context: {
+    componentName: string;
+    componentCode: string;
+    imports: Record<string, string>;
+    examples: Record<string, string>;
+    extraContext: string;
+  },
+  options: WorkflowOptions
+) {
+  // Initialize the state graph
   const graph = new StateGraph({
     channels: {
       file: {
-        value: {} as FileState // Type of state passed between nodes
+        path: testFilePath,
+        content: "",
+        status: "pending",
+        currentStep: "INITIALIZE",
+        context, // Simplified context structure from ContextEnricher
+        retries: {
+          rtl: 0,
+          ts: 0,
+          lint: 0
+        },
+        maxRetries: options.maxRetries || 5
       }
     }
   });
+
+  // Add nodes to the graph
+  graph.addNode("LoadTestFile", loadTestFileNode);
+  graph.addNode("ApplyContext", applyContextNode);
+  graph.addNode("AnalyzeTest", analyzeTestNode);
+  graph.addNode("ConvertToRTL", convertToRTLNode);
+  // Add other nodes...
   
-  // Add all nodes
-  graph.addNode("initialize", initializeNode);
-  graph.addNode("llmConvertToRTL", llmConvertToRTLNode);
-  graph.addNode("runRTLTest", runRTLTestNode);
-  graph.addNode("llmRefactorRTL", llmRefactorRTLNode);
-  graph.addNode("lintFix", lintFixNode);
-  graph.addNode("lintCheck", lintCheckNode);
-  graph.addNode("llmRefactorLint", llmRefactorLintNode);
-  graph.addNode("tsCheck", tsCheckNode);
-  graph.addNode("llmRefactorTS", llmRefactorTSNode);
-  graph.addNode("success", successNode);
-  graph.addNode("failure", failureNode);
-  
-  // Connect nodes
-  graph.addEdge("initialize", "llmConvertToRTL");
-  graph.addEdge("llmConvertToRTL", "runRTLTest");
-  
-  // RTL Test branching
-  graph.addConditionalEdges(
-    "runRTLTest",
-    (state) => state.rtlTest?.passed ? "lintFix" : "llmRefactorRTL"
-  );
-  
-  // RTL refactor retry loop
-  graph.addConditionalEdges(
-    "llmRefactorRTL",
-    (state) => {
-      if (state.status === "FAILED") return "failure";
-      return "runRTLTest";
-    }
-  );
-  
-  // Lint process
-  graph.addEdge("lintFix", "lintCheck");
-  
-  // Lint Check branching
-  graph.addConditionalEdges(
-    "lintCheck",
-    (state) => state.lintCheck?.passed ? "tsCheck" : "llmRefactorLint"
-  );
-  
-  // Lint refactor retry loop
-  graph.addConditionalEdges(
-    "llmRefactorLint",
-    (state) => {
-      if (state.status === "FAILED") return "failure";
-      return "lintCheck";
-    }
-  );
-  
-  // TypeScript Check branching
-  graph.addConditionalEdges(
-    "tsCheck",
-    (state) => state.tsCheck?.passed ? "success" : "llmRefactorTS"
-  );
-  
-  // TypeScript refactor retry loop
-  graph.addConditionalEdges(
-    "llmRefactorTS",
-    (state) => {
-      if (state.status === "FAILED") return "failure";
-      return "tsCheck";
-    }
-  );
-  
-  // Set entry point
-  graph.setEntryPoint("initialize");
+  // Define edges and other workflow configuration...
   
   return graph;
 }
 ```
 
-## Execution
+## Integration with Sequential Migration Manager
 
 ```typescript
-export async function runMigrationWorkflow(filePath: string) {
-  // Create the workflow graph
-  const graph = await createMigrationGraph();
+// migration/sequentialMigrationManager.ts
+import { StateGraph } from "langchain/graphs";
+import { createLangGraphWorkflow } from "../workflow/langGraphWorkflow";
+import { LangGraphObserver } from "../langGraph/observer";
+
+export class SequentialMigrationManager {
+  constructor(private observer: LangGraphObserver) {}
   
-  // Set up initial state
-  const initialState: FileState = {
-    path: filePath,
-    tempPath: `${filePath}.temp.tsx`,
-    attemptPath: `${path.dirname(filePath)}/.attempts/${path.basename(filePath)}`,
-    originalContent: "",
-    currentContent: "",
-    status: "RUNNING",
-    currentStep: "",
-    retries: {
-      rtl: 0,
-      lint: 0,
-      ts: 0
-    },
-    maxRetries: 5,
-    error: null,
-    rtlTest: null,
-    lintCheck: null,
-    tsCheck: null
-  };
+  async processSingleFile(
+    filePath: string, 
+    enrichedContext: {
+      testedComponent: {
+        name: string;
+        filePath: string;
+        content: string;
+      };
+      relatedFiles: Map<string, string>;
+      exampleTests?: Map<string, string>;
+      extraContext?: string;
+    }, 
+    options?: MigrationOptions
+  ) {
+    // Create a new workflow for this file with the complete context
+    const workflow = createLangGraphWorkflow(
+      filePath, 
+      {
+        componentName: enrichedContext.testedComponent.name,
+        componentCode: enrichedContext.testedComponent.content,
+        imports: Object.fromEntries(enrichedContext.relatedFiles),
+        examples: enrichedContext.exampleTests ? Object.fromEntries(enrichedContext.exampleTests) : {},
+        extraContext: enrichedContext.extraContext || ""
+      },
+      {
+        maxRetries: options?.maxRetries || 5,
+        skipTs: options?.skipTs || false,
+        skipLint: options?.skipLint || false
+      }
+    );
+    
+    // Register the observer
+    this.observer.observeGraph(workflow, filePath);
+    
+    // Notify that we're processing this file
+    this.observer.notifyCurrentFileChanged(filePath);
+    
+    // Run the workflow
+    try {
+      const result = await workflow.execute();
+      return result;
+    } catch (error) {
+      console.error(`Error processing file ${filePath}:`, error);
+      throw error;
+    }
+  }
   
-  // Execute the workflow
-  const result = await graph.invoke({ file: initialState });
-  
-  return result.file;
-} 
+  // Other methods...
+}
+```
+
+## How Context Enhances LLM Performance
+
+The enriched context from the ContextEnricher significantly improves the LLM's migration performance:
+
+1. **Component Access**: The LLM has direct access to the full code of the component being tested
+2. **Import Visibility**: Access to imported files gives the LLM understanding of dependencies and utilities
+3. **API Awareness**: Having the actual component code helps the LLM understand its API and behavior
+4. **Testing Context**: The LLM can see how the component was intended to be used
+5. **Simpler Structure**: The straightforward structure makes it easy for the LLM to navigate
+
+This context is especially valuable for complex components with unique usage patterns that would otherwise be difficult for the LLM to infer from the test file alone. 

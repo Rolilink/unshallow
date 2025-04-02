@@ -11,6 +11,7 @@ The Migration Service acts as the central orchestration component in the applica
 3. **Process Orchestration**: Manages the migration process from start to finish
 4. **File Processing**: Coordinates the migration of multiple files through the SequentialMigrationManager
 5. **Error Handling**: Centralizes error handling for the migration process
+6. **Import Analysis**: Configures AST-based import analysis for LLM context
 
 ## Interface
 
@@ -38,6 +39,7 @@ interface MigrationOptions {
   skipLint?: boolean;
   maxRetries?: number;
   pattern?: string;
+  importDepth?: number;
 }
 
 // Stats interface
@@ -59,6 +61,24 @@ type MigrationEventType =
   | 'failed'
   | 'progress';
 ```
+
+## AST Import Analysis
+
+A key feature of the migration process is AST-based import analysis, which:
+
+1. **Analyzes Test Files**: Parses the TypeScript/React test files using an AST parser
+2. **Identifies Component Imports**: Determines which components are being tested
+3. **Follows Import Chain**: Recursively analyzes imports up to the specified depth
+4. **Builds Context**: Includes relevant component code as context for the LLM
+
+This analysis is critical for providing the LLM with sufficient context about the component under test, including its props, state, and dependencies. The `importDepth` option controls how deep this analysis goes:
+
+- **importDepth=0**: Only analyze the test file itself
+- **importDepth=1**: Include direct imports (the component being tested)
+- **importDepth=2**: Include imports of imports (dependencies of the tested component)
+- **importDepth=3+**: Follow import chain even deeper
+
+Deeper analysis provides more context but increases processing time. The default of 1 typically provides a good balance for most migrations.
 
 ## Implementation
 
@@ -162,7 +182,7 @@ export class MigrationService extends EventEmitter {
       // 5. Notify observer that migration is starting
       this.observer.notifyMigrationStarted(filePaths.length);
       
-      // 6. Start the migration process
+      // 6. Start the migration process, passing importDepth option
       await this.manager.startMigration(filePaths, options);
       
       // 7. Notify observer that migration completed successfully
@@ -245,6 +265,7 @@ sequenceDiagram
     participant UI as React UI
     participant Observer as LangGraphObserver
     participant Manager as SequentialMigrationManager
+    participant AST as AST Analyzer
     participant LangGraph
     
     CLI->>MigrationService: migrateFiles(inputPath, config)
@@ -266,7 +287,15 @@ sequenceDiagram
     
     %% Process files one by one
     loop For each file
+        %% Import analysis
+        Manager->>AST: analyzeImports(file, importDepth)
+        AST->>AST: parseAST(file)
+        AST->>AST: followImports(recursively)
+        AST-->>Manager: componentContext
+        
+        %% LangGraph processing
         Manager->>LangGraph: create workflow for file
+        Manager->>LangGraph: provide component context
         LangGraph->>LangGraph: process file nodes
         
         %% State changes and event flow
@@ -282,6 +311,13 @@ sequenceDiagram
     Manager-->>MigrationService: all files processed
     MigrationService->>Observer: notifyMigrationCompleted()
     MigrationService-->>CLI: resolve promise
+    
+    %% Error handling path (alternative flow)
+    rect rgb(255, 240, 240)
+        Note over MigrationService,Observer: Error handling flow
+        MigrationService->>Observer: notifyMigrationFailed(error)
+        MigrationService-->>CLI: throw error
+    end
 ```
 
 ### Key Process Stages
@@ -292,19 +328,25 @@ sequenceDiagram
    - UI initialization
    - Event setup
 
-2. **Migration Process**
-   - Manager starts migration
+2. **Import Analysis**
+   - Parse test file AST
+   - Identify component imports
+   - Follow import chain to specified depth
+   - Build component context for LLM
+
+3. **Migration Process**
+   - Manager starts migration with component context
    - Each file is processed through LangGraph
    - State changes are observed and relayed
    - UI is updated with progress
 
-3. **Completion**
+4. **Completion**
    - All files processed
    - Final notifications sent
    - Promise resolved
    - CLI exits
 
-4. **Error Handling**
+5. **Error Handling**
    - Errors at any stage are caught
    - Observer is notified
    - Error is re-thrown to CLI
