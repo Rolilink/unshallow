@@ -4,11 +4,12 @@
 
 ```mermaid
 graph TD
-    A[WorkflowManager] --> B[MigrationContext]
-    B --> C[App UI]
-    C --> D[ProgressTracker]
-    C --> E[FileStatusDisplay]
-    C --> F[SummaryView]
+    A[Migration Service] --> B[LangGraphObserver]
+    B --> C[MigrationContext]
+    C --> D[App UI]
+    D --> E[ProgressTracker]
+    D --> F[FileStatusDisplay]
+    D --> G[SummaryView]
 ```
 
 ## Core State Structure
@@ -31,7 +32,11 @@ type FileState = {
   path: string;
   status: 'pending' | 'in-progress' | 'success' | 'failed';
   step: 'migration' | 'ts' | 'lint' | 'complete';
-  retries: number;
+  retries: {
+    rtl: number;
+    lint: number;
+    ts: number;
+  };
   maxRetries: number;
   tempFilePath?: string;
   attemptFilePath?: string;
@@ -41,35 +46,84 @@ type FileState = {
     details?: string;
     timestamp: number;
   };
+  
+  // Node-specific results
+  rtlTest?: {
+    passed: boolean;
+    output: string;
+  };
+  
+  lintCheck?: {
+    passed: boolean;
+    message: string;
+    attempted: boolean;
+  };
+  
+  tsCheck?: {
+    passed: boolean;
+    message: string;
+  };
 };
 ```
 
 ## State Management Pattern
 
 ```typescript
-// Context definition
+// Context definition - purely for state observation
 const MigrationContext = createContext<{
   state: MigrationState;
-  startMigration: (files: string[]) => void;
-  // Other actions...
 }>(initialContextValue);
 
 // Context provider
 export const MigrationProvider: React.FC = ({ children }) => {
   const [state, dispatch] = useReducer(migrationReducer, initialState);
   
-  // Action creators
-  const startMigration = useCallback((files: string[]) => {
-    dispatch({ type: 'MIGRATION_STARTED', payload: { totalFiles: files.length } });
-    // Workflow logic here...
-  }, []);
+  // Set up event listeners to update state based on observer events
+  useEffect(() => {
+    const handleFileStateUpdate = (event) => {
+      dispatch({ 
+        type: 'FILE_UPDATED', 
+        payload: event.fileState 
+      });
+    };
+    
+    const handleCurrentFileChanged = (event) => {
+      dispatch({ 
+        type: 'CURRENT_FILE_CHANGED', 
+        payload: { path: event.filePath } 
+      });
+    };
+    
+    const handleMigrationCompleted = () => {
+      dispatch({ type: 'MIGRATION_COMPLETED' });
+    };
+    
+    const handleMigrationFailed = (event) => {
+      dispatch({ 
+        type: 'MIGRATION_FAILED', 
+        payload: { error: event.error } 
+      });
+    };
+    
+    // Register event listeners
+    langGraphObserver.on('fileStateUpdate', handleFileStateUpdate);
+    langGraphObserver.on('currentFileChanged', handleCurrentFileChanged);
+    langGraphObserver.on('migrationCompleted', handleMigrationCompleted);
+    langGraphObserver.on('migrationFailed', handleMigrationFailed);
+    
+    // Clean up listeners on unmount
+    return () => {
+      langGraphObserver.off('fileStateUpdate', handleFileStateUpdate);
+      langGraphObserver.off('currentFileChanged', handleCurrentFileChanged);
+      langGraphObserver.off('migrationCompleted', handleMigrationCompleted);
+      langGraphObserver.off('migrationFailed', handleMigrationFailed);
+    };
+  }, [dispatch]);
   
   // Memoize the context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
-    state,
-    startMigration,
-    // Other actions...
-  }), [state, startMigration]);
+    state
+  }), [state]);
   
   return (
     <MigrationContext.Provider value={contextValue}>
@@ -136,8 +190,14 @@ const FileStatusDisplay = () => {
       <Text>Current file: {file.path}</Text>
       <Text>Status: {file.status}</Text>
       <Text>Step: {file.step}</Text>
-      {file.retries > 0 && (
-        <Text>Retry: {file.retries}/{file.maxRetries}</Text>
+      {file.retries.rtl > 0 && (
+        <Text>RTL Retries: {file.retries.rtl}/{file.maxRetries}</Text>
+      )}
+      {file.retries.lint > 0 && (
+        <Text>Lint Retries: {file.retries.lint}/{file.maxRetries}</Text>
+      )}
+      {file.retries.ts > 0 && (
+        <Text>TS Retries: {file.retries.ts}/{file.maxRetries}</Text>
       )}
     </Box>
   );
@@ -168,68 +228,88 @@ const SummaryView = () => {
 
 ## Under the Hood
 
-While the UI uses a single source of truth, the internal state management still uses a reducer with actions:
+The state management uses a pure reducer that only responds to events from the observer:
 
 ```typescript
-// Action types
+// Action types - all triggered by external events, not by UI
 type MigrationAction = 
   | { type: 'MIGRATION_STARTED', payload: { totalFiles: number } }
-  | { type: 'FILE_STARTED', payload: { file: string, tempFile: string } }
-  | { type: 'STEP_STARTED', payload: { file: string, step: string } }
-  | { type: 'STEP_COMPLETED', payload: { file: string, step: string, success: boolean, error?: Error } }
-  | { type: 'RETRY_ATTEMPT', payload: { file: string, step: string, attempt: number, maxRetries: number } }
-  | { type: 'FILE_COMPLETED', payload: { file: string, success: boolean } }
-  | { type: 'MIGRATION_COMPLETED' };
+  | { type: 'FILE_UPDATED', payload: FileState }
+  | { type: 'CURRENT_FILE_CHANGED', payload: { path: string } }
+  | { type: 'MIGRATION_COMPLETED' }
+  | { type: 'MIGRATION_FAILED', payload: { error: Error } };
 
 // Reducer to handle state transitions
 const migrationReducer = (state: MigrationState, action: MigrationAction): MigrationState => {
   switch (action.type) {
     case 'MIGRATION_STARTED':
-      // Initialize state for a new migration
       return {
         ...state,
         status: 'running',
         files: {},
         currentFile: undefined
       };
-    // Other action handlers...
+      
+    case 'FILE_UPDATED':
+      const fileState = action.payload;
+      return {
+        ...state,
+        files: {
+          ...state.files,
+          [fileState.path]: fileState
+        }
+      };
+      
+    case 'CURRENT_FILE_CHANGED':
+      return {
+        ...state,
+        currentFile: action.payload.path
+      };
+      
+    case 'MIGRATION_COMPLETED':
+      return {
+        ...state,
+        status: 'completed'
+      };
+      
+    case 'MIGRATION_FAILED':
+      return {
+        ...state,
+        status: 'failed'
+      };
+      
     default:
       return state;
   }
 };
 ```
 
-## Performance Optimization
+## Integration with LangGraph Observer
 
-For performance with large file sets, use memoization and selectors:
+The state management layer purely reacts to events from the LangGraph Observer:
 
 ```typescript
-// Memoized selectors
-const useFileStats = () => {
-  const { state } = useMigration();
+// In the MigrationProvider
+useEffect(() => {
+  // Register listeners for events from LangGraph Observer
+  langGraphObserver.on('migrationStarted', (event) => {
+    dispatch({
+      type: 'MIGRATION_STARTED',
+      payload: { totalFiles: event.totalFiles }
+    });
+  });
   
-  return useMemo(() => {
-    const files = Object.values(state.files);
-    return {
-      total: files.length,
-      completed: files.filter(f => f.status === 'success').length,
-      failed: files.filter(f => f.status === 'failed').length,
-      inProgress: files.filter(f => f.status === 'in-progress').length,
-      pending: files.filter(f => f.status === 'pending').length
-    };
-  }, [state.files]);
-};
+  // More event listeners...
+  
+  // Clean up on unmount
+  return () => {
+    langGraphObserver.off('migrationStarted');
+    // Unregister other listeners...
+  };
+}, [dispatch]);
+```
 
-// Component using memoized selector
-const StatsDisplay = () => {
-  const stats = useFileStats();
-  
-  return (
-    <Box>
-      <Text>Files: {stats.total}</Text>
-      <Text>Completed: {stats.completed}</Text>
-      <Text>Failed: {stats.failed}</Text>
-    </Box>
-  );
-};
-``` 
+This pattern ensures that:
+1. The UI is purely reactive, with no control logic
+2. State updates come exclusively from external events
+3. Components focus solely on rendering the current state 

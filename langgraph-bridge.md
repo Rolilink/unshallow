@@ -4,9 +4,9 @@
 
 ```mermaid
 graph TD
-    A[LangGraph Workflow] --> B[EventEmitter Observer]
-    B --> C[Custom React Hook]
-    C --> D[React Components]
+    A[LangGraph Workflow] --> B[LangGraphObserver]
+    B --> C[React State]
+    D[Migration Service] --> A
     
     subgraph "LangGraph Domain"
         A
@@ -16,13 +16,18 @@ graph TD
     
     subgraph "React Domain"
         C
-        D
-        F[React State]
+        F[React Components]
         C --> F
     end
     
+    subgraph "Service Domain"
+        D
+        G[CLI Commands]
+        G --> D
+    end
+    
     B -.-> |observes| E
-    B --> |updates| F
+    B --> |updates| C
 ```
 
 ## Observer Pattern Implementation
@@ -52,37 +57,122 @@ class LangGraphObserver extends EventEmitter {
   /**
    * Registers listeners on a LangGraph StateGraph instance
    * @param graph The LangGraph StateGraph to observe
+   * @param filePath The path of the file being processed by this graph
    */
-  observeGraph(graph: StateGraph) {
+  observeGraph(graph: StateGraph, filePath: string) {
     // Monitor every state transition in the graph
     graph.onStateChange((oldState, newState) => {
-      // Emit normalized state change events
-      this.emit('stateChange', { oldState, newState });
-    });
-    
-    // Monitor individual node executions for granular updates
-    graph.onNodeExecution((node, input, output) => {
-      // Emit node-specific events with relevant data
-      this.emit('nodeExecution', { 
-        node: node.id, 
-        input, 
-        output,
-        timestamp: Date.now()
-      });
+      // Map the LangGraph state to our app state format
+      const mappedState = this.mapLangGraphStateToAppState(newState.file, filePath);
       
-      // Emit specialized events for specific nodes
-      this.emit(`node:${node.id}`, { input, output });
+      // Emit state change event with the mapped state
+      this.emit('fileStateUpdate', {
+        filePath,
+        fileState: mappedState
+      });
     });
     
     // Monitor workflow completion
     graph.onWorkflowEnd((finalState) => {
-      this.emit('workflowEnd', finalState);
+      // Map the final state
+      const mappedState = this.mapLangGraphStateToAppState(finalState.file, filePath);
+      
+      this.emit('fileWorkflowComplete', {
+        filePath,
+        fileState: mappedState
+      });
     });
     
     // Monitor workflow errors
     graph.onError((error, state) => {
-      this.emit('error', { error, state });
+      // Map the error state
+      const mappedState = this.mapLangGraphStateToAppState(state.file, filePath);
+      
+      this.emit('fileWorkflowError', {
+        filePath,
+        error,
+        fileState: mappedState
+      });
     });
+  }
+  
+  /**
+   * Maps LangGraph file state to application file state format
+   */
+  private mapLangGraphStateToAppState(lgState: any, filePath: string) {
+    return {
+      path: filePath,
+      status: this.mapStatus(lgState.status),
+      step: this.mapStep(lgState.currentStep),
+      retries: lgState.retries || { rtl: 0, lint: 0, ts: 0 },
+      maxRetries: lgState.maxRetries || 5,
+      tempFilePath: lgState.tempPath,
+      attemptFilePath: lgState.attemptPath,
+      error: lgState.error,
+      rtlTest: lgState.rtlTest,
+      lintCheck: lgState.lintCheck,
+      tsCheck: lgState.tsCheck
+    };
+  }
+  
+  /**
+   * Maps LangGraph status to application status
+   */
+  private mapStatus(langGraphStatus: string): 'pending' | 'in-progress' | 'success' | 'failed' {
+    const statusMap = {
+      'RUNNING': 'in-progress',
+      'COMPLETE': 'success',
+      'FAILED': 'failed'
+    };
+    return statusMap[langGraphStatus] || 'pending';
+  }
+  
+  /**
+   * Maps LangGraph step to application step
+   */
+  private mapStep(langGraphStep: string): 'migration' | 'ts' | 'lint' | 'complete' {
+    const stepMap = {
+      'INITIALIZE': 'migration',
+      'LLM_CONVERT_TO_RTL': 'migration',
+      'RUN_RTL_TEST': 'migration',
+      'LLM_REFACTOR_RTL': 'migration',
+      'LINT_FIX': 'lint',
+      'LINT_CHECK': 'lint',
+      'LLM_REFACTOR_LINT': 'lint',
+      'TS_CHECK': 'ts',
+      'LLM_REFACTOR_TS': 'ts',
+      'SUCCESS': 'complete',
+      'FAILED': 'complete'
+    };
+    return stepMap[langGraphStep] || 'migration';
+  }
+  
+  /**
+   * Emits event when migration starts
+   */
+  notifyMigrationStarted(totalFiles: number) {
+    this.emit('migrationStarted', { totalFiles });
+  }
+  
+  /**
+   * Emits event when current file changes
+   */
+  notifyCurrentFileChanged(filePath: string) {
+    this.emit('currentFileChanged', { filePath });
+  }
+  
+  /**
+   * Emits event when the entire migration completes
+   */
+  notifyMigrationCompleted() {
+    this.emit('migrationCompleted');
+  }
+  
+  /**
+   * Emits event when the migration fails
+   */
+  notifyMigrationFailed(error: Error) {
+    this.emit('migrationFailed', { error });
   }
   
   /**
@@ -102,153 +192,115 @@ export const langGraphObserver = new LangGraphObserver();
 ```typescript
 // Define all possible events for better TypeScript support
 export type LangGraphEvent = 
-  | 'stateChange'      // Emitted on any state change
-  | 'nodeExecution'    // Emitted when any node executes
-  | 'workflowEnd'      // Emitted when workflow completes
-  | 'error'            // Emitted on errors
-  | `node:${string}`;  // Dynamically generated event for specific nodes
+  | 'fileStateUpdate'      // Emitted when a file's state changes
+  | 'fileWorkflowComplete' // Emitted when a file's workflow completes
+  | 'fileWorkflowError'    // Emitted when a file's workflow has an error
+  | 'migrationStarted'     // Emitted when migration starts
+  | 'currentFileChanged'   // Emitted when current file changes
+  | 'migrationCompleted'   // Emitted when all files are processed
+  | 'migrationFailed';     // Emitted when migration fails
 
 // Define event payload types
-export interface StateChangeEvent {
-  oldState: any;
-  newState: any;
+export interface FileStateUpdateEvent {
+  filePath: string;
+  fileState: FileState;
 }
 
-export interface NodeExecutionEvent {
-  node: string;
-  input: any;
-  output: any;
-  timestamp: number;
+export interface FileWorkflowCompleteEvent {
+  filePath: string;
+  fileState: FileState;
 }
 
-export interface WorkflowEndEvent {
-  finalState: any;
-}
-
-export interface ErrorEvent {
+export interface FileWorkflowErrorEvent {
+  filePath: string;
   error: Error;
-  state: any;
+  fileState: FileState;
+}
+
+export interface MigrationStartedEvent {
+  totalFiles: number;
+}
+
+export interface CurrentFileChangedEvent {
+  filePath: string;
+}
+
+export interface MigrationFailedEvent {
+  error: Error;
 }
 ```
 
-## Using Custom Hook with Observer
+## React Hook for State Observation
 
-### 1. Custom Hook Implementation
+### Custom Hook Implementation
 
 ```typescript
-// hooks/useLangGraphMigration.ts
-import { useState, useEffect, useCallback } from 'react';
-import { useMigration } from '../context/migrationContext';
+// hooks/useLangGraphObserver.ts
+import { useState, useEffect, useReducer } from 'react';
 import { langGraphObserver } from '../langGraph/observer';
-import { initiateLangGraphWorkflow } from '../langGraph/workflow';
+import { migrationReducer, initialState } from '../state/migrationReducer';
 
 /**
- * Custom hook that integrates LangGraph with the React application
- * Provides a simple interface for components to interact with the migration process
+ * Custom hook that connects to LangGraph events and updates React state
+ * This hook is purely observational - it doesn't control the migration
  */
-export function useLangGraphMigration() {
-  const { state, dispatch } = useMigration();
-  const [isInitializing, setIsInitializing] = useState(false);
+export function useLangGraphObserver() {
+  const [state, dispatch] = useReducer(migrationReducer, initialState);
   
-  // Set up event listeners when the hook mounts
+  // Set up event listeners to update state based on observer events
   useEffect(() => {
-    // Handle state changes from LangGraph
-    const handleStateChange = ({ oldState, newState }) => {
+    const handleFileStateUpdate = (event) => {
       dispatch({ 
-        type: 'LANGGRAPH_STATE_UPDATE', 
-        payload: mapLangGraphStateToReactState(newState)
+        type: 'FILE_UPDATED', 
+        payload: event.fileState 
       });
     };
     
-    // Handle node executions to track progress
-    const handleNodeExecution = ({ node, output }) => {
-      if (output.file) {
-        // Map node names to our step types
-        const stepMap = {
-          'parseEnzyme': 'migration',
-          'tsCheck': 'ts',
-          'lintCheck': 'lint'
-        };
-        
-        dispatch({ 
-          type: 'STEP_STARTED', 
-          payload: { 
-            file: output.file.path, 
-            step: stepMap[node] || node
-          }
-        });
-      }
+    const handleCurrentFileChanged = (event) => {
+      dispatch({ 
+        type: 'CURRENT_FILE_CHANGED', 
+        payload: { path: event.filePath } 
+      });
     };
     
-    // Listen for workflow completion
-    const handleWorkflowEnd = (finalState) => {
+    const handleMigrationStarted = (event) => {
+      dispatch({ 
+        type: 'MIGRATION_STARTED', 
+        payload: { totalFiles: event.totalFiles } 
+      });
+    };
+    
+    const handleMigrationCompleted = () => {
       dispatch({ type: 'MIGRATION_COMPLETED' });
     };
     
-    // Listen for errors
-    const handleError = ({ error, state }) => {
-      if (state.file) {
-        dispatch({
-          type: 'ERROR',
-          payload: {
-            file: state.file.path,
-            error: error.message,
-            step: state.file.currentStep
-          }
-        });
-      }
+    const handleMigrationFailed = (event) => {
+      dispatch({ 
+        type: 'MIGRATION_FAILED', 
+        payload: { error: event.error } 
+      });
     };
     
     // Register event listeners
-    langGraphObserver.on('stateChange', handleStateChange);
-    langGraphObserver.on('nodeExecution', handleNodeExecution);
-    langGraphObserver.on('workflowEnd', handleWorkflowEnd);
-    langGraphObserver.on('error', handleError);
+    langGraphObserver.on('fileStateUpdate', handleFileStateUpdate);
+    langGraphObserver.on('currentFileChanged', handleCurrentFileChanged);
+    langGraphObserver.on('migrationStarted', handleMigrationStarted);
+    langGraphObserver.on('migrationCompleted', handleMigrationCompleted);
+    langGraphObserver.on('migrationFailed', handleMigrationFailed);
     
-    // Clean up on unmount
+    // Clean up listeners on unmount
     return () => {
-      langGraphObserver.off('stateChange', handleStateChange);
-      langGraphObserver.off('nodeExecution', handleNodeExecution);
-      langGraphObserver.off('workflowEnd', handleWorkflowEnd);
-      langGraphObserver.off('error', handleError);
+      langGraphObserver.off('fileStateUpdate', handleFileStateUpdate);
+      langGraphObserver.off('currentFileChanged', handleCurrentFileChanged);
+      langGraphObserver.off('migrationStarted', handleMigrationStarted);
+      langGraphObserver.off('migrationCompleted', handleMigrationCompleted);
+      langGraphObserver.off('migrationFailed', handleMigrationFailed);
     };
   }, [dispatch]);
   
-  // Start migration process
-  const startMigration = useCallback(async (files: string[]) => {
-    if (state.status === 'running' || isInitializing) return;
-    
-    try {
-      setIsInitializing(true);
-      dispatch({ type: 'MIGRATION_STARTED', payload: { totalFiles: files.length } });
-      
-      // Initialize the workflow
-      await initiateLangGraphWorkflow(files);
-      
-      setIsInitializing(false);
-    } catch (error) {
-      setIsInitializing(false);
-      dispatch({ 
-        type: 'MIGRATION_FAILED', 
-        payload: { error: error.message } 
-      });
-    }
-  }, [state.status, isInitializing, dispatch]);
-  
-  // Cancel ongoing migration
-  const cancelMigration = useCallback(() => {
-    // Implementation would depend on how LangGraph supports cancellation
-    dispatch({ type: 'MIGRATION_CANCELLED' });
-  }, [dispatch]);
-  
-  // Return state and methods
+  // Return only the state, no control methods
   return {
-    // Methods
-    startMigration,
-    cancelMigration,
-    
     // State
-    isInitializing,
     migrationStatus: state.status,
     files: state.files,
     currentFile: state.currentFile,
@@ -261,171 +313,128 @@ export function useLangGraphMigration() {
 }
 ```
 
-### 2. State Mapping Helper
+## Integration with Migration Service
+
+The LangGraphObserver is used by the MigrationService to notify UI of changes:
 
 ```typescript
-/**
- * Transforms LangGraph state structure to our React state format
- */
-function mapLangGraphStateToReactState(langGraphState) {
-  // If no files array in state, return empty state
-  if (!langGraphState.files) return { files: {}, status: 'running' };
+// services/migrationService.ts
+import { langGraphObserver } from '../langGraph/observer';
+import { SequentialMigrationManager } from '../migration/migrationManager';
+
+export class MigrationService {
+  private manager: SequentialMigrationManager;
+  private observer: typeof langGraphObserver;
   
-  // Transform to React state shape
-  return {
-    files: langGraphState.files.reduce((acc, file) => {
-      acc[file.path] = {
-        path: file.path,
-        status: mapStatus(file.status),
-        step: mapStep(file.currentStep),
-        retries: file.retryCount || 0,
-        maxRetries: file.maxRetries || 5,
-        tempFilePath: file.tempPath,
-        attemptFilePath: file.attemptPath,
-        error: file.error ? {
-          step: mapStep(file.error.step),
-          message: file.error.message,
-          details: file.error.details,
-          timestamp: file.error.timestamp || Date.now()
-        } : undefined
-      };
-      return acc;
-    }, {}),
-    currentFile: langGraphState.currentFile,
-    status: langGraphState.status === "COMPLETED" ? "completed" :
-            langGraphState.status === "FAILED" ? "failed" : "running"
-  };
-}
-
-// Helper mapping functions
-function mapStatus(langGraphStatus) {
-  const statusMap = {
-    'WAITING': 'pending',
-    'IN_PROGRESS': 'in-progress',
-    'COMPLETE': 'success',
-    'FAILED': 'failed'
-  };
-  return statusMap[langGraphStatus] || 'pending';
-}
-
-function mapStep(langGraphStep) {
-  const stepMap = {
-    'PARSE_ENZYME': 'migration',
-    'CONVERT_TO_RTL': 'migration',
-    'RUN_TS_CHECK': 'ts',
-    'RUN_LINT_CHECK': 'lint'
-  };
-  return stepMap[langGraphStep] || 'migration';
+  constructor() {
+    this.observer = langGraphObserver;
+    this.manager = new SequentialMigrationManager(this.observer);
+  }
+  
+  async migrateFiles(filePaths: string[], options) {
+    try {
+      // Notify that migration is starting
+      this.observer.notifyMigrationStarted(filePaths.length);
+      
+      // Start the migration process
+      await this.manager.startMigration(filePaths, options);
+      
+      // Notify that migration completed successfully
+      this.observer.notifyMigrationCompleted();
+    } catch (error) {
+      // Notify that migration failed
+      this.observer.notifyMigrationFailed(error);
+      throw error;
+    }
+  }
+  
+  stopMigration() {
+    this.manager.stop();
+  }
 }
 ```
 
 ## Component Integration Example
 
 ```tsx
-// components/MigrationController.tsx
-import React, { useState } from 'react';
-import { useLangGraphMigration } from '../hooks/useLangGraphMigration';
-import { FileSelector } from './FileSelector';
-import { ProgressTracker } from './ProgressTracker';
-import { SummaryView } from './SummaryView';
+// components/MigrationStatus.tsx
+import React from 'react';
+import { useLangGraphObserver } from '../hooks/useLangGraphObserver';
 
-export const MigrationController: React.FC = () => {
+export const MigrationStatus: React.FC = () => {
   const { 
-    startMigration, 
-    cancelMigration, 
-    isInitializing,
     migrationStatus,
     files,
     currentFile,
     fileCount,
     completedCount,
     failedCount
-  } = useLangGraphMigration();
+  } = useLangGraphObserver();
   
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  
-  const handleFileSelect = (files: string[]) => {
-    setSelectedFiles(files);
-  };
-  
-  const handleStartClick = () => {
-    if (selectedFiles.length > 0) {
-      startMigration(selectedFiles);
-    }
-  };
-  
+  // Simply display migration status - no control functionality
   return (
-    <div className="migration-container">
-      <h1>Enzyme to RTL Migration Tool</h1>
+    <div className="migration-status">
+      <h2>Migration Status: {migrationStatus}</h2>
       
-      {/* File selection UI - only shown when not running */}
-      {migrationStatus !== 'running' && (
-        <div className="selection-panel">
-          <FileSelector onSelect={handleFileSelect} />
-          <button 
-            onClick={handleStartClick} 
-            disabled={isInitializing || selectedFiles.length === 0}
-          >
-            {isInitializing ? 'Initializing...' : 'Start Migration'}
-          </button>
-        </div>
-      )}
-      
-      {/* Progress UI - shown during migration */}
       {migrationStatus === 'running' && (
-        <div className="progress-panel">
-          <ProgressTracker 
-            files={files} 
-            currentFile={currentFile} 
-            completed={completedCount}
-            failed={failedCount}
-            total={fileCount}
-          />
-          <button onClick={cancelMigration}>
-            Cancel Migration
-          </button>
+        <div className="progress">
+          <div className="progress-bar" style={{ width: `${(completedCount + failedCount) / fileCount * 100}%` }} />
+          <p>Progress: {completedCount + failedCount} of {fileCount} files processed</p>
+          {currentFile && (
+            <p>Currently processing: {currentFile}</p>
+          )}
         </div>
       )}
       
-      {/* Results UI - shown after completion */}
       {(migrationStatus === 'completed' || migrationStatus === 'failed') && (
-        <SummaryView 
-          files={files}
-          stats={{
-            total: fileCount,
-            completed: completedCount,
-            failed: failedCount
-          }}
-        />
+        <div className="summary">
+          <p>Completed: {completedCount} files</p>
+          <p>Failed: {failedCount} files</p>
+          
+          {failedCount > 0 && (
+            <div className="failures">
+              <h3>Failed Files:</h3>
+              <ul>
+                {Object.values(files)
+                  .filter(file => file.status === 'failed')
+                  .map(file => (
+                    <li key={file.path}>
+                      {file.path} - {file.error?.message}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 };
 ```
 
-## Benefits of Custom Hook Approach
+## Benefits of Unidirectional Observer Approach
 
-1. **Component Simplification**
-   - Components don't need to know about the observer implementation
-   - Clean API through the hook's return values
-   - Computed values provided directly
+1. **Clean Separation**
+   - React components only observe state, they don't control the migration
+   - Migration control is handled by the CLI and service layer
+   - Observer transforms between LangGraph state and React state
 
-2. **Encapsulation**
-   - All LangGraph interaction logic is contained in the hook
-   - Observer setup is hidden from components
-   - Event handling is centralized
+2. **Reuse in Non-UI Contexts**
+   - The migration process can be used without a UI
+   - Multiple UI technologies could observe the same migration
+   - CLI can use the same migration logic for headless operation
 
-3. **Reusability**
-   - Single hook can be used across multiple components
-   - Consistent state access and update patterns
-   - Shared event listeners
+3. **Testability**
+   - React components can be tested with mock state
+   - Migration service can be tested without UI dependencies
+   - Observer can be tested independently
 
-4. **Lifecycle Management**
-   - Proper setup and cleanup of event listeners
-   - Component-tied initialization state
-   - Error boundary around LangGraph interactions
+4. **Independent Development**
+   - UI team can develop components against a specified event interface
+   - Migration team can develop workflows without UI concerns
+   - Changes to either side don't affect the other as long as the event contract is maintained
 
-5. **Testability**
-   - Hook can be mocked for component testing
-   - Event handling can be tested in isolation
-   - State transformations are pure and testable 
+5. **Scalability**
+   - New migration features don't require UI changes
+   - New UI features don't require migration changes
+   - Multiple observers could be added (e.g., logging, metrics) 
