@@ -2,12 +2,37 @@
 import {Command} from 'commander';
 import {handleMigrateCommand} from './commands/migrate.js';
 import {handleContextEnricherCommand} from './commands/context-enricher.js';
+import {handleSetApiKeyCommand, handleGetApiKeyCommand} from './commands/config.js';
 
 // Create the main program
 const program = new Command()
 	.name('unshallow')
 	.description('Migrate Enzyme tests to React Testing Library')
 	.version('0.0.1');
+
+// Add the config command
+program
+	.command('config')
+	.description('Configuration management');
+
+// Add set-api-key subcommand
+program
+	.command('config:set-api-key')
+	.description('Set the OpenAI API key')
+	.argument('<key>', 'Your OpenAI API key')
+	.action((key) => {
+		const exitCode = handleSetApiKeyCommand(key);
+		process.exit(exitCode);
+	});
+
+// Add get-api-key subcommand
+program
+	.command('config:get-api-key')
+	.description('View the current OpenAI API key (masked)')
+	.action(() => {
+		const exitCode = handleGetApiKeyCommand();
+		process.exit(exitCode);
+	});
 
 // Add the migrate command
 program
@@ -16,6 +41,7 @@ program
 	.argument('<path>', 'File or directory to migrate from Enzyme to RTL')
 	.option('--skip-ts-check', 'Skip TypeScript checking')
 	.option('--skip-lint-check', 'Skip ESLint checking')
+	.option('--skip-test-run', 'Skip running the test')
 	.option('--max-retries <number>', 'Maximum LLM retries', '5')
 	.option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx}')
 	.option('--import-depth <number>', 'Depth for AST import analysis', '1')
@@ -42,8 +68,17 @@ program
 		'Custom command for TypeScript checking',
 		'yarn ts:check',
 	)
-	.action((inputPath, options) => {
-		const exitCode = handleMigrateCommand(inputPath, options);
+	.option(
+		'--test-cmd <command>',
+		'Custom command for running tests',
+		'yarn test',
+	)
+	.option(
+		'--api-key <key>',
+		'OpenAI API key to use for this command (overrides config)',
+	)
+	.action(async (inputPath, options) => {
+		const exitCode = await handleMigrateCommand(inputPath, options);
 		process.exit(exitCode);
 	});
 
