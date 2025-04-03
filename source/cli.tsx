@@ -1,29 +1,21 @@
 #!/usr/bin/env node
 import React from 'react';
 import {render} from 'ink';
-import meow from 'meow';
+import {Command} from 'commander';
 import App from './app.js';
 
-const cli = meow(
-	`
-	Usage
-	  $ unshallow
+const program = new Command()
+	.name('unshallow')
+	.description('CLI tool for unshallow')
+	.option('--name <name>', 'Your name')
+	.version('0.0.0')
+	.addHelpText('after', `
+Examples:
+  $ unshallow --name=Jane
+  Hello, Jane
+`)
+	.parse(process.argv);
 
-	Options
-		--name  Your name
+const options = program.opts();
 
-	Examples
-	  $ unshallow --name=Jane
-	  Hello, Jane
-`,
-	{
-		importMeta: import.meta,
-		flags: {
-			name: {
-				type: 'string',
-			},
-		},
-	},
-);
-
-render(<App name={cli.flags.name} />);
+render(<App name={options['name']} />);

@@ -1,6 +1,6 @@
 {
 	"name": "unshallow",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"license": "MIT",
 	"bin": "dist/cli.js",
 	"type": "module",
@@ -16,12 +16,13 @@
 		"dist"
 	],
 	"dependencies": {
+		"commander": "^13.1.0",
 		"ink": "^4.1.0",
-		"meow": "^11.0.0",
 		"react": "^18.2.0"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^7.0.0",
+		"@types/node": "^22.14.0",
 		"@types/react": "^18.0.32",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^5.2.0",
