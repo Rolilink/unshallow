@@ -14,10 +14,10 @@ export interface ContextEnricherOptions {
 /**
  * Handles the context-enricher command
  */
-export function handleContextEnricherCommand(
+export async function handleContextEnricherCommand(
   testFilePath: string,
   options: ContextEnricherOptions
-): number {
+): Promise<number> {
   try {
     // Get the project root (current working directory)
     const projectRoot = process.cwd();
@@ -41,54 +41,71 @@ export function handleContextEnricherCommand(
     console.log('Enriching context for test file:', testFilePath);
     console.log('Options:', JSON.stringify(enrichmentOptions, null, 2));
 
-    // Process the test file asynchronously and output results
-    contextEnricher.enrichContext(absoluteTestFilePath, enrichmentOptions)
-      .then(enrichedContext => {
-        const outputFormat = options.outputFormat || 'pretty';
+    try {
+      // Process the test file asynchronously and get results
+      const enrichedContext = await contextEnricher.enrichContext(absoluteTestFilePath, enrichmentOptions);
 
-        if (outputFormat === 'json') {
-          // Convert Maps to objects for JSON serialization
-          const jsonOutput = {
-            testedComponent: enrichedContext.testedComponent,
-            relatedFiles: Object.fromEntries(enrichedContext.relatedFiles),
-            exampleTests: enrichedContext.exampleTests
-              ? Object.fromEntries(enrichedContext.exampleTests)
-              : undefined,
-            extraContext: enrichedContext.extraContext
-          };
+      const outputFormat = options.outputFormat || 'pretty';
 
-          console.log(JSON.stringify(jsonOutput, null, 2));
-        } else {
-          // Pretty print format
-          console.log('\nEnriched Context Results:');
+      if (outputFormat === 'json') {
+        // Convert Maps to objects for JSON serialization
+        const jsonOutput = {
+          testedComponent: enrichedContext.testedComponent,
+          relatedFiles: Object.fromEntries(enrichedContext.relatedFiles),
+          exampleTests: enrichedContext.exampleTests
+            ? Object.fromEntries(enrichedContext.exampleTests)
+            : undefined,
+          extraContext: enrichedContext.extraContext
+        };
+
+        console.log(JSON.stringify(jsonOutput, null, 2));
+      } else {
+        // Pretty print format
+        console.log('\nEnriched Context Results:');
+        console.log('------------------------');
+
+        console.log(`\nTested Component: ${enrichedContext.testedComponent.name}`);
+        console.log(`Component File: ${enrichedContext.testedComponent.filePath}`);
+
+        console.log('\nComponent Content:');
+        console.log('------------------------');
+        console.log(enrichedContext.testedComponent.content);
+        console.log('------------------------\n');
+
+        console.log('\nRelated Files:');
+        enrichedContext.relatedFiles.forEach((content, filePath) => {
+          console.log(`- ${filePath}`);
+          console.log('\nFile Content:');
           console.log('------------------------');
+          console.log(content);
+          console.log('------------------------\n');
+        });
 
-          console.log(`\nTested Component: ${enrichedContext.testedComponent.name}`);
-          console.log(`Component File: ${enrichedContext.testedComponent.filePath}`);
-
-          console.log('\nRelated Files:');
-          enrichedContext.relatedFiles.forEach((_, filePath) => {
+        if (enrichedContext.exampleTests && enrichedContext.exampleTests.size > 0) {
+          console.log('\nExample Tests:');
+          enrichedContext.exampleTests.forEach((content, filePath) => {
             console.log(`- ${filePath}`);
+            console.log('\nExample Test Content:');
+            console.log('------------------------');
+            console.log(content);
+            console.log('------------------------\n');
           });
-
-          if (enrichedContext.exampleTests && enrichedContext.exampleTests.size > 0) {
-            console.log('\nExample Tests:');
-            enrichedContext.exampleTests.forEach((_, filePath) => {
-              console.log(`- ${filePath}`);
-            });
-          }
-
-          if (enrichedContext.extraContext) {
-            console.log('\nExtra Context: Loaded from', options.contextFile);
-          }
         }
-      })
-      .catch(error => {
-        console.error('Error enriching context:', error.message);
-        process.exit(1);
-      });
 
-    return 0; // Success
+        if (enrichedContext.extraContext) {
+          console.log('\nExtra Context: Loaded from', options.contextFile);
+          console.log('\nExtra Context Content:');
+          console.log('------------------------');
+          console.log(enrichedContext.extraContext);
+          console.log('------------------------\n');
+        }
+      }
+
+      return 0; // Success
+    } catch (error: any) {
+      console.error('Error enriching context:', error.message);
+      return 1; // Error
+    }
   } catch (error) {
     console.error('Context enrichment failed:', error);
     return 1; // Error

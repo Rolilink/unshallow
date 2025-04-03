@@ -57,7 +57,7 @@ export class ContextEnricher {
 
       // Build map of related files (component imports)
       const relatedFiles = new Map<string, string>();
-      await this.processImports(componentFilePath, relatedFiles, 1, importDepth);
+      await this.processImports(componentFilePath, relatedFiles, 0, importDepth);
 
       // Create the base context
       const context: EnrichedContext = {
@@ -118,6 +118,15 @@ export class ContextEnricher {
   }
 
   /**
+   * Get a map of all related file contents from the enriched context
+   * @param context The enriched context object
+   * @returns A map of file paths to their contents
+   */
+  getRelatedFilesContent(context: EnrichedContext): Map<string, string> {
+    return context.relatedFiles;
+  }
+
+  /**
    * Find the tested component in a source file by analyzing imports and test patterns
    */
   private findTestedComponent(
@@ -161,17 +170,13 @@ export class ContextEnricher {
       'shallow',
       'mount',
       'render', // Enzyme and RTL
-      'screen',
-      'findBy',
-      'getBy', // RTL patterns
-      'wrapper',
-      'querySelector', // Common testing patterns
     ];
 
     // Look for component usage in test file
     let testedComponent: {name: string; importPath: string} | null = null;
 
-    ts.forEachChild(sourceFile, node => {
+    // Recursively visit all nodes in the AST
+    const visitNode = (node: ts.Node): void => {
       if (testedComponent) return; // Already found
 
       // Check for testing function calls
@@ -185,18 +190,18 @@ export class ContextEnricher {
             let componentName = '';
 
             // JSX Element case (<ComponentName />)
-            if (
-              ts.isJsxElement(firstArg) ||
-              ts.isJsxSelfClosingElement(firstArg)
+            if (firstArg &&
+              (ts.isJsxElement(firstArg as ts.Node) ||
+              ts.isJsxSelfClosingElement(firstArg as ts.Node))
             ) {
-              const tagName = ts.isJsxElement(firstArg)
-                ? firstArg.openingElement.tagName.getText()
-                : firstArg.tagName.getText();
+              const tagName = ts.isJsxElement(firstArg as ts.Node)
+                ? (firstArg as ts.JsxElement).openingElement.tagName.getText()
+                : (firstArg as ts.JsxSelfClosingElement).tagName.getText();
               componentName = tagName;
             }
             // Variable reference case (ComponentName)
-            else if (ts.isIdentifier(firstArg)) {
-              componentName = firstArg.text;
+            else if (firstArg && ts.isIdentifier(firstArg as ts.Node)) {
+              componentName = (firstArg as ts.Identifier).text;
             }
 
             if (componentName) {
@@ -214,7 +219,13 @@ export class ContextEnricher {
           }
         }
       }
-    });
+
+      // Continue recursion through all children
+      ts.forEachChild(node, visitNode);
+    };
+
+    // Start recursive traversal
+    visitNode(sourceFile);
 
     return testedComponent;
   }

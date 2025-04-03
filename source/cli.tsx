@@ -70,8 +70,8 @@ program
 		'Output format (pretty or json)',
 		'pretty'
 	)
-	.action((testFilePath, options) => {
-		const exitCode = handleContextEnricherCommand(testFilePath, options);
+	.action(async (testFilePath, options) => {
+		const exitCode = await handleContextEnricherCommand(testFilePath, options);
 		process.exit(exitCode);
 	});
 
