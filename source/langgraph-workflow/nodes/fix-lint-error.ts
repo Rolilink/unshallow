@@ -3,18 +3,21 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAI } from '../utils/openai.js';
 
 /**
- * Refactors the RTL test when lint checks fail
+ * Fixes ESLint errors in the RTL test
  */
-export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult> => {
+export const fixLintErrorNode = async (state: WorkflowState, config?: { apiKey?: string }): Promise<NodeResult> => {
   const { file } = state;
+
+  console.log(`[fix-lint-error] Fixing lint (retry ${file.retries.lint + 1}/${file.maxRetries})`);
 
   // Check if we've reached max retries
   if (file.retries.lint >= file.maxRetries) {
+    console.log(`[fix-lint-error] Max retries reached (${file.maxRetries})`);
     return {
       file: {
         ...file,
         status: 'failed',
-        error: new Error(`Maximum retry limit reached (${file.maxRetries}) for lint error refactoring`),
+        error: new Error(`Maximum retry limit reached (${file.maxRetries}) for lint fixes`),
         currentStep: WorkflowStep.LINT_CHECK_FAILED,
       },
     };
@@ -23,37 +26,33 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
   try {
     const lintErrors = file.lintCheck?.errors?.join('\n') || 'Unknown lint errors';
 
-    // Generate the prompt for refactoring
+    // Generate the prompt for fixing lint errors
     const prompt = `
-# Task: Fix linting errors in React Testing Library test
-
-## Original Component
-\`\`\`tsx
-${file.context.componentCode}
-\`\`\`
+# Task: Fix ESLint errors in React Testing Library test
 
 ## Current RTL Test Code
 \`\`\`tsx
 ${file.rtlTest}
 \`\`\`
 
-## Lint Errors
+## ESLint Errors
 \`\`\`
 ${lintErrors}
 \`\`\`
 
 ## Instructions
-1. Fix all linting errors in the RTL test.
-2. Follow best practices for code style and formatting.
-3. Make sure imports are correct and organized properly.
-4. Remove any unused variables or imports.
-5. Return ONLY the fixed test code, with no explanations.
+1. Fix the ESLint errors in the RTL test.
+2. Follow standard ESLint rules and best practices.
+3. Ensure code style is consistent.
+4. Return ONLY the fixed test code, with no explanations.
 `;
 
-    // Call OpenAI with the prompt
-    const response = await callOpenAI(prompt, file.apiKey);
+    console.log(`[fix-lint-error] Calling OpenAI for fixes`);
 
-    // Return the updated state with the refactored test
+    // Call OpenAI with the prompt, using the API key from config
+    const response = await callOpenAI(prompt, config?.apiKey);
+
+    // Return the updated state with the fixed test
     return {
       file: {
         ...file,
@@ -66,6 +65,8 @@ ${lintErrors}
       },
     };
   } catch (error) {
+    console.error(`[fix-lint-error] Error: ${error instanceof Error ? error.message : String(error)}`);
+
     return {
       file: {
         ...file,

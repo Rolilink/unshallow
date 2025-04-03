@@ -3,18 +3,21 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAI } from '../utils/openai.js';
 
 /**
- * Refactors the RTL test when TypeScript validation fails
+ * Fixes TypeScript errors in the RTL test
  */
-export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> => {
+export const fixTsErrorNode = async (state: WorkflowState, config?: { apiKey?: string }): Promise<NodeResult> => {
   const { file } = state;
+
+  console.log(`[fix-ts-error] Fixing TypeScript (retry ${file.retries.ts + 1}/${file.maxRetries})`);
 
   // Check if we've reached max retries
   if (file.retries.ts >= file.maxRetries) {
+    console.log(`[fix-ts-error] Max retries reached (${file.maxRetries})`);
     return {
       file: {
         ...file,
         status: 'failed',
-        error: new Error(`Maximum retry limit reached (${file.maxRetries}) for TypeScript refactoring`),
+        error: new Error(`Maximum retry limit reached (${file.maxRetries}) for TypeScript fixes`),
         currentStep: WorkflowStep.TS_VALIDATION_FAILED,
       },
     };
@@ -23,7 +26,7 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
   try {
     const tsErrors = file.tsCheck?.errors?.join('\n') || 'Unknown TypeScript errors';
 
-    // Generate the prompt for refactoring
+    // Generate the prompt for fixing TS errors
     const prompt = `
 # Task: Fix TypeScript errors in React Testing Library test
 
@@ -50,10 +53,12 @@ ${tsErrors}
 5. Return ONLY the fixed test code, with no explanations.
 `;
 
-    // Call OpenAI with the prompt
-    const response = await callOpenAI(prompt, file.apiKey);
+    console.log(`[fix-ts-error] Calling OpenAI for fixes`);
 
-    // Return the updated state with the refactored test
+    // Call OpenAI with the prompt, using the API key from config
+    const response = await callOpenAI(prompt, config?.apiKey);
+
+    // Return the updated state with the fixed test
     return {
       file: {
         ...file,
@@ -66,6 +71,8 @@ ${tsErrors}
       },
     };
   } catch (error) {
+    console.error(`[fix-ts-error] Error: ${error instanceof Error ? error.message : String(error)}`);
+
     return {
       file: {
         ...file,

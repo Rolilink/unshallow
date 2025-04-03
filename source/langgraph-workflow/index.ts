@@ -18,6 +18,8 @@ import {
   hasExceededRetries
 } from './edges.js';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
+import { langfuseCallbackHandler } from '../langsmith.js';
+
 
 type FileState = {
 	path: string;
@@ -42,7 +44,6 @@ type FileState = {
 	skipTs: boolean;
 	skipLint: boolean;
 	skipTest: boolean;
-	apiKey?: string;
 	testResult?: TestResult;
 	tsCheck?: TsCheckResult;
 	lintCheck?: LintCheckResult;
@@ -53,56 +54,16 @@ type FileState = {
 	componentContext?: string;
 }
 
-/**
- * Creates a workflow graph for migrating a test file using LangGraph.
- */
-export function createWorkflow(
-  testFilePath: string,
-  context: EnrichedContext,
-  options: WorkflowOptions = {}
-): { initialState: WorkflowState, execute: () => Promise<WorkflowState> } {
-  const maxRetries = options.maxRetries || 3;
+const WorkflowStateAnnotation = Annotation.Root({
+	file: Annotation<FileState>,
+})
 
-	const WorkflowStateAnnotation = Annotation.Root({
-		file: Annotation<FileState>,
-	})
+export const graph = new StateGraph(
+	WorkflowStateAnnotation,
+);
 
-  // Initial file state
-  const initialState: WorkflowState = {
-    file: {
-      path: testFilePath,
-      content: '',
-      status: 'pending',
-      currentStep: WorkflowStep.INITIALIZE,
-      context, // Context from ContextEnricher
-      retries: {
-        rtl: 0,
-        test: 0,
-        ts: 0,
-        lint: 0,
-      },
-      maxRetries,
-      commands: {
-        lintCheck: options.lintCheckCmd || 'yarn lint:check',
-        lintFix: options.lintFixCmd || 'yarn lint:fix',
-        tsCheck: options.tsCheckCmd || 'yarn ts:check',
-        test: options.testCmd || 'yarn test',
-      },
-      apiKey: options.apiKey,
-      originalTest: '',
-      skipTs: options.skipTs || false,
-      skipLint: options.skipLint || false,
-      skipTest: options.skipTest || false,
-    },
-  };
-
-  // Create a new StateGraph
-  const graph = new StateGraph(
-		WorkflowStateAnnotation,
-	);
-
-  // Define all nodes in the graph
-  graph.addNode("load_test_file", loadTestFileNode)
+// Add all nodes to the graph
+graph.addNode("load_test_file", loadTestFileNode)
 	.addNode("apply_context", applyContextNode)
 	.addNode("convert_to_rtl", convertToRTLNode)
 	.addNode("run_test", runTestNode)
@@ -110,7 +71,7 @@ export function createWorkflow(
 	.addNode("ts_validation", tsValidationNode)
 	.addNode("fix_ts_error", fixTsErrorNode)
 	.addNode("lint_check", lintCheckNode)
-	.addNode("refactor_lint", fixLintErrorNode)
+	.addNode("fix_lint_error", fixLintErrorNode)
   .addEdge(START, "load_test_file")
   .addConditionalEdges(
     "load_test_file",
@@ -142,9 +103,7 @@ export function createWorkflow(
       end: END
     }
   )
-  // Edge from fix_rtl_error back to run_test (retry loop)
   .addEdge("fix_rtl_error", "run_test")
-  // Conditional edge from ts_validation that handles skipping
   .addConditionalEdges(
     "ts_validation",
     (state) => {
@@ -160,37 +119,88 @@ export function createWorkflow(
       end: END
     }
   )
-  // Edge from fix_ts_error back to ts_validation (retry loop)
   .addEdge("fix_ts_error", "ts_validation")
-  // Conditional edge from lint_check that handles skipping
   .addConditionalEdges(
     "lint_check",
     (state) => {
       if (state.file.skipLint) return "skip_lint";
       if (hasLintCheckPassed(state)) return "lint_passed";
-      if (hasLintCheckFailed(state) && !hasExceededRetries(state)) return "refactor_lint";
+      if (hasLintCheckFailed(state) && !hasExceededRetries(state)) return "fix_lint_error";
       return "end";
     },
     {
       skip_lint: "lint_check",
       lint_passed: "lint_check",
-      refactor_lint: "refactor_lint",
+      fix_lint_error: "fix_lint_error",
       end: END
     }
   )
-  // Edge from refactor_lint back to lint_check (retry loop)
-  .addEdge("refactor_lint", "lint_check")
+  .addEdge("fix_lint_error", "lint_check");
 
-  // Compile the graph
-  const compiledGraph = graph.compile();
+// Compile the graph
+const enzymeToRtlConverterGraph = graph.compile();
+
+/**
+ * Creates a workflow graph for migrating a test file using LangGraph.
+ */
+export function createWorkflow(
+  testFilePath: string,
+  context: EnrichedContext,
+  options: WorkflowOptions = {}
+): { initialState: WorkflowState, execute: () => Promise<WorkflowState> } {
+  const maxRetries = options.maxRetries || 3;
+  // Store API key separately, not in the state
+  const apiKey = options.apiKey;
+
+  // Initial file state
+  const initialState: WorkflowState = {
+    file: {
+      path: testFilePath,
+      content: '',
+      status: 'pending',
+      currentStep: WorkflowStep.INITIALIZE,
+      context, // Context from ContextEnricher
+      retries: {
+        rtl: 0,
+        test: 0,
+        ts: 0,
+        lint: 0,
+      },
+      maxRetries,
+      commands: {
+        lintCheck: options.lintCheckCmd || 'yarn lint:check',
+        lintFix: options.lintFixCmd || 'yarn lint:fix',
+        tsCheck: options.tsCheckCmd || 'yarn ts:check',
+        test: options.testCmd || 'yarn test',
+      },
+      originalTest: '',
+      skipTs: options.skipTs || false,
+      skipLint: options.skipLint || false,
+      skipTest: options.skipTest || false,
+    },
+  };
 
   /**
    * Execute the workflow
    */
   const execute = async (): Promise<WorkflowState> => {
     try {
+      // Pass API key separately via context instead of in the state
+      const contextWithApiKey = {
+        apiKey
+      };
+
       // Execute the graph with the initial state
-      const result = await compiledGraph.invoke(initialState);
+      const result = await enzymeToRtlConverterGraph.invoke(initialState, {
+        callbacks: [langfuseCallbackHandler],
+        configurable: {
+          // Pass API key via configurable context
+          convertToRTL: { apiKey },
+          fix_rtl_error: { apiKey },
+          fix_ts_error: { apiKey },
+          fix_lint_error: { apiKey }
+        }
+      });
       return result;
     } catch (error) {
       console.error('Error in workflow execution:', error);
@@ -229,6 +239,7 @@ export async function processSingleFile(
 
   // Execute the workflow
   try {
+		console.log('Executing workflow...');
     return await execute();
   } catch (error) {
     console.error(`Error processing file ${testFilePath}:`, error);

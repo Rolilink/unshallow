@@ -5,11 +5,14 @@ import { callOpenAI } from '../utils/openai.js';
 /**
  * Fixes the RTL test when the test run fails
  */
-export const fixRtlNode = async (state: WorkflowState): Promise<NodeResult> => {
+export const fixRtlNode = async (state: WorkflowState, config?: { apiKey?: string }): Promise<NodeResult> => {
   const { file } = state;
+
+  console.log(`[fix-rtl-error] Fixing test (retry ${file.retries.rtl + 1}/${file.maxRetries})`);
 
   // Check if we've reached max retries
   if (file.retries.rtl >= file.maxRetries) {
+    console.log(`[fix-rtl-error] Max retries reached (${file.maxRetries})`);
     return {
       file: {
         ...file,
@@ -49,8 +52,10 @@ ${testError}
 4. Return ONLY the fixed test code, with no explanations.
 `;
 
-    // Call OpenAI with the prompt
-    const response = await callOpenAI(prompt, file.apiKey);
+    console.log(`[fix-rtl-error] Calling OpenAI for fixes`);
+
+    // Call OpenAI with the prompt, using the API key from config
+    const response = await callOpenAI(prompt, config?.apiKey);
 
     // Return the updated state with the refactored test
     return {
@@ -65,6 +70,8 @@ ${testError}
       },
     };
   } catch (error) {
+    console.error(`[fix-rtl-error] Error: ${error instanceof Error ? error.message : String(error)}`);
+
     return {
       file: {
         ...file,

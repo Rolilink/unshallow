@@ -138,9 +138,6 @@ export interface FileState {
     test: string;
   };
 
-  // API key for OpenAI
-  apiKey?: string;
-
   // Skip options
   skipTs: boolean;
   skipLint: boolean;

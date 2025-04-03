@@ -24,6 +24,6 @@ ${enzymeTest}
 9. Replace .simulate() with fireEvent or userEvent.
 10. Replace .prop() or .props() with appropriate RTL alternatives.
 
-Only return the converted code, with no markdown formatting or explanations.
+Only return the converted code, with no markdown formatting or explanations, don't return the code in \`\`\`tsx\`\`\` tags.
 `;
 }

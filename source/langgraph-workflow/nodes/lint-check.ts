@@ -6,99 +6,91 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
- * Runs a lint check on the generated test
+ * Runs ESLint checks on the RTL test
  */
 export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
 
-  // Skip lint check if requested
+  console.log(`[lint-check] Checking: ${file.path}`);
+
+  // Skip if configured to skip lint
   if (file.skipLint) {
+    console.log(`[lint-check] Skipped (skipLint enabled)`);
     return {
       file: {
         ...file,
-        currentStep: WorkflowStep.LINT_CHECK_SKIPPED,
         lintCheck: {
           success: true,
           errors: [],
-          output: 'Lint check skipped as requested',
         },
+        currentStep: WorkflowStep.LINT_CHECK_SKIPPED,
       },
     };
   }
 
   try {
-    // Try to run lint fix first
+    // Get the path to check
+    const fileToCheck = file.tempPath || file.path;
+
+    // First try to auto-fix linting issues
+    const lintFixCmd = file.commands.lintFix || 'yarn lint:fix';
+
+    console.log(`[lint-check] Auto-fixing with: ${lintFixCmd}`);
+
     try {
-      const lintFixCmd = file.commands.lintFix;
-      await execAsync(`${lintFixCmd} ${file.tempPath || file.path}`);
+      await execAsync(`${lintFixCmd} ${fileToCheck}`);
     } catch (fixError) {
-      // Continue even if fix fails
-      console.warn('Lint fix failed, continuing with lint check');
+      console.warn(`[lint-check] Auto-fix failed, continuing with check`);
     }
 
-    // Run lint check
-    try {
-      const lintCheckCmd = file.commands.lintCheck;
-      const { stderr } = await execAsync(`${lintCheckCmd} ${file.tempPath || file.path}`);
+    // Run the lint check command
+    const lintCheckCmd = file.commands.lintCheck || 'yarn lint:check';
 
-      // Check if there are any errors in output
-      if (stderr && stderr.toLowerCase().includes('error')) {
-        // Parse errors
-        const errors = stderr.split('\n').filter(line => line.includes('error'));
+    console.log(`[lint-check] Executing: ${lintCheckCmd}`);
 
-        return {
-          file: {
-            ...file,
-            lintCheck: {
-              success: false,
-              errors,
-              output: stderr,
-            },
-            retries: {
-              ...file.retries,
-              lint: file.retries.lint + 1,
-            },
-            currentStep: WorkflowStep.LINT_CHECK_FAILED,
-          },
-        };
-      }
+    const { stderr } = await execAsync(`${lintCheckCmd} ${fileToCheck}`);
 
-      // Lint check passed
-      return {
-        file: {
-          ...file,
-          lintCheck: {
-            success: true,
-            errors: [],
-            output: 'Lint check passed',
-          },
-          status: 'success', // If we reach here, the whole migration is successful
-          currentStep: WorkflowStep.LINT_CHECK_PASSED,
-        },
-      };
-    } catch (error: any) {
-      // Lint check command failed
+    // Check if the lint check found issues
+    if (stderr && stderr.includes('error')) {
+      const errors = stderr.split('\n').filter(line => line.includes('error'));
+
+      console.log(`[lint-check] Failed with ${errors.length} errors`);
+
       return {
         file: {
           ...file,
           lintCheck: {
             success: false,
-            errors: [error.stderr || error.message],
-            output: error.stderr || error.message,
-          },
-          retries: {
-            ...file.retries,
-            lint: file.retries.lint + 1,
+            errors: errors,
           },
           currentStep: WorkflowStep.LINT_CHECK_FAILED,
         },
       };
     }
-  } catch (error) {
+
+    console.log(`[lint-check] Passed`);
+
+    // Lint check passed
     return {
       file: {
         ...file,
-        error: error instanceof Error ? error : new Error(String(error)),
+        lintCheck: {
+          success: true,
+          errors: [],
+        },
+        currentStep: WorkflowStep.LINT_CHECK_PASSED,
+      },
+    };
+  } catch (error) {
+    console.error(`[lint-check] Error: ${error instanceof Error ? error.message : String(error)}`);
+
+    return {
+      file: {
+        ...file,
+        lintCheck: {
+          success: false,
+          errors: [error instanceof Error ? error.message : String(error)],
+        },
         status: 'failed',
         currentStep: WorkflowStep.LINT_CHECK_ERROR,
       },

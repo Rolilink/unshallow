@@ -23,6 +23,7 @@
 		"dotenv": "^16.4.7",
 		"ink": "^4.1.0",
 		"langchain": "^0.3.19",
+		"langfuse-langchain": "^3.37.1",
 		"openai": "^4.91.1",
 		"react": "^18.2.0"
 	},

@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
-
+import { langfuseCallbackHandler } from '../../langsmith.js';
 /**
  * Calls OpenAI with the given prompt and returns the completion
  */
@@ -10,6 +10,8 @@ export async function callOpenAI(prompt: string, apiKey?: string): Promise<strin
     temperature: 0.2,
     modelName: 'gpt-4',
     openAIApiKey: apiKey || process.env['OPENAI_API_KEY'],
+    callbacks: [langfuseCallbackHandler],
+    verbose: true,
   });
 
   // Create a prompt template
@@ -24,6 +26,8 @@ export async function callOpenAI(prompt: string, apiKey?: string): Promise<strin
   const response = await chain.invoke({
     prompt,
   });
+
+  console.log('response:', response.content.toString());
 
   // Extract and return the content
   return response.content.toString();

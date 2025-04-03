@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
  */
 export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  console.log(`[load-test-file] Processing: ${file.path}`);
 
   try {
     // Read the test file
@@ -21,6 +22,7 @@ export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult
       },
     };
   } catch (error) {
+    console.error(`[load-test-file] Error: ${error instanceof Error ? error.message : String(error)}`);
     return {
       file: {
         ...file,

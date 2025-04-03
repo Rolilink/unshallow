@@ -9,6 +9,8 @@ export const applyContextNode = async (state: WorkflowState): Promise<NodeResult
   const { file } = state;
   const { context } = file;
 
+  console.log(`[apply-context] Applying context for: ${context.componentName}`);
+
   // Use the template function to format the component context
   const componentContext = formatComponentContext(
     context.componentName,
