@@ -30,30 +30,48 @@ Options:
 ```typescript
 #!/usr/bin/env node
 // cli/index.ts
-import { program } from 'commander';
-import { handleMigrateCommand } from './commands/migrate';
-import { version } from '../package.json';
+import {program} from 'commander';
+import {handleMigrateCommand} from './commands/migrate';
+import {version} from '../package.json';
 
 program
-  .name('unshallow')
-  .description('Migrate Enzyme tests to React Testing Library')
-  .version(version);
+	.name('unshallow')
+	.description('Migrate Enzyme tests to React Testing Library')
+	.version(version);
 
 program
-  .command('migrate')
-  .description('Migrate Enzyme test files to React Testing Library')
-  .argument('<path>', 'File or directory to migrate from Enzyme to RTL')
-  .option('--skip-ts-check', 'Skip TypeScript checking')
-  .option('--skip-lint-check', 'Skip ESLint checking')
-  .option('--max-retries <number>', 'Maximum LLM retries', '5')
-  .option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx}')
-  .option('--import-depth <number>', 'Depth for AST import analysis', '1')
-  .option('--examples <paths>', 'Comma-separated list of example tests to use as references')
-  .option('--context-file <path>', 'Path to a text file with additional context for the migration')
-  .option('--lint-check-cmd <command>', 'Custom command for lint checking', 'yarn lint:check')
-  .option('--lint-fix-cmd <command>', 'Custom command for lint fixing', 'yarn lint:fix')
-  .option('--ts-check-cmd <command>', 'Custom command for TypeScript checking', 'yarn ts:check')
-  .action(handleMigrateCommand);
+	.command('migrate')
+	.description('Migrate Enzyme test files to React Testing Library')
+	.argument('<path>', 'File or directory to migrate from Enzyme to RTL')
+	.option('--skip-ts-check', 'Skip TypeScript checking')
+	.option('--skip-lint-check', 'Skip ESLint checking')
+	.option('--max-retries <number>', 'Maximum LLM retries', '5')
+	.option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx}')
+	.option('--import-depth <number>', 'Depth for AST import analysis', '1')
+	.option(
+		'--examples <paths>',
+		'Comma-separated list of example tests to use as references',
+	)
+	.option(
+		'--context-file <path>',
+		'Path to a text file with additional context for the migration',
+	)
+	.option(
+		'--lint-check-cmd <command>',
+		'Custom command for lint checking',
+		'yarn lint:check',
+	)
+	.option(
+		'--lint-fix-cmd <command>',
+		'Custom command for lint fixing',
+		'yarn lint:fix',
+	)
+	.option(
+		'--ts-check-cmd <command>',
+		'Custom command for TypeScript checking',
+		'yarn ts:check',
+	)
+	.action(handleMigrateCommand);
 
 program.parse();
 ```
@@ -62,51 +80,53 @@ program.parse();
 
 ```typescript
 // cli/commands/migrate.ts
-import { migrationService } from '../../services/migrationService';
+import {migrationService} from '../../services/migrationService';
 
 export async function handleMigrateCommand(
-  inputPath: string, 
-  options: {
-    skipTsCheck?: boolean;
-    skipLintCheck?: boolean;
-    maxRetries?: string;
-    pattern?: string;
-    importDepth?: string;
-    examples?: string;
-    contextFile?: string;
-    lintCheckCmd?: string;
-    lintFixCmd?: string;
-    tsCheckCmd?: string;
-  }
+	inputPath: string,
+	options: {
+		skipTsCheck?: boolean;
+		skipLintCheck?: boolean;
+		maxRetries?: string;
+		pattern?: string;
+		importDepth?: string;
+		examples?: string;
+		contextFile?: string;
+		lintCheckCmd?: string;
+		lintFixCmd?: string;
+		tsCheckCmd?: string;
+	},
 ) {
-  try {
-    // Configure options for migration
-    const config = {
-      skipTs: options.skipTsCheck || false,
-      skipLint: options.skipLintCheck || false,
-      maxRetries: parseInt(options.maxRetries || '5', 10),
-      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
-      importDepth: parseInt(options.importDepth || '1', 10),
-      exampleTests: options.examples ? options.examples.split(',').map(path => path.trim()) : undefined,
-      extraContextFile: options.contextFile,
-      lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
-      lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
-      tsCheckCmd: options.tsCheckCmd || 'yarn ts:check'
-    };
-    
-    // Log minimal initial message
-    console.log(`Starting migration process for ${inputPath}`);
-    
-    // Start the migration service - all file handling happens inside the service
-    await migrationService.migrateFiles(inputPath, config);
-    
-    // Exit with success code when completed
-    process.exit(0);
-  } catch (error) {
-    // Log minimal error and exit
-    console.error('Migration failed');
-    process.exit(1);
-  }
+	try {
+		// Configure options for migration
+		const config = {
+			skipTs: options.skipTsCheck || false,
+			skipLint: options.skipLintCheck || false,
+			maxRetries: parseInt(options.maxRetries || '5', 10),
+			pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
+			importDepth: parseInt(options.importDepth || '1', 10),
+			exampleTests: options.examples
+				? options.examples.split(',').map(path => path.trim())
+				: undefined,
+			extraContextFile: options.contextFile,
+			lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
+			lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
+			tsCheckCmd: options.tsCheckCmd || 'yarn ts:check',
+		};
+
+		// Log minimal initial message
+		console.log(`Starting migration process for ${inputPath}`);
+
+		// Start the migration service - all file handling happens inside the service
+		await migrationService.migrateFiles(inputPath, config);
+
+		// Exit with success code when completed
+		process.exit(0);
+	} catch (error) {
+		// Log minimal error and exit
+		console.error('Migration failed');
+		process.exit(1);
+	}
 }
 ```
 
@@ -120,6 +140,7 @@ await migrationService.migrateFiles(inputPath, config);
 ```
 
 This call starts the following cascade of events (handled by the Migration Service):
+
 1. Path validation
 2. File path expansion based on the provided pattern
 3. UI initialization (React app is rendered)
@@ -130,6 +151,7 @@ This call starts the following cascade of events (handled by the Migration Servi
 ## Single Responsibility
 
 The CLI layer has a clearly defined single responsibility:
+
 - **Does**: Parse arguments and start the Migration Service
 - **Does Not**: Validate paths (delegated to Migration Service)
 - **Does Not**: Expand file paths (delegated to Migration Service)
@@ -145,11 +167,11 @@ sequenceDiagram
     participant User
     participant CLI
     participant MigrationService
-    
+
     User->>CLI: migrate command
     CLI->>MigrationService: migrateFiles(inputPath, config)
     Note right of CLI: CLI's job is done here
-    
+
     MigrationService->>MigrationService: validate path exists
     MigrationService->>MigrationService: expand file patterns
     MigrationService->>MigrationService: initialize UI

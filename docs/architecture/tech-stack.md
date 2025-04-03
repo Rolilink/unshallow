@@ -3,6 +3,7 @@
 ## Core Technologies
 
 ### CLI Framework
+
 - **Commander.js**
   - Excellent TypeScript support
   - Mature and well-maintained
@@ -15,6 +16,7 @@
   - Built-in help text generation
 
 ### UI Framework
+
 - **Ink**
   - Built specifically for React
   - First-class TypeScript support
@@ -25,6 +27,7 @@
   - Modern terminal app capabilities
 
 ### Language & Runtime
+
 - **TypeScript**: Primary development language
   - Strong type safety
   - Modern JavaScript features
@@ -33,7 +36,9 @@
 - **Node.js**: Runtime environment
 
 ### LLM Integration
+
 - **LangChain.js**: Framework for LLM operations
+
   - Chain management
   - Prompt templating
   - LLM integration
@@ -50,13 +55,16 @@
   - Progress tracking and monitoring
 
 ### AST Analysis & File Processing
+
 - **TypeScript Compiler API**: For AST parsing and analysis
+
   - Precise source code analysis
   - Component and import detection
   - Type information extraction
   - Full TypeScript syntax support
 
 - **glob**: File pattern matching
+
   - Recursive directory traversal
   - Pattern-based file matching
   - Used for finding test files
@@ -67,6 +75,7 @@
   - Temporary file handling
 
 ### Event Handling
+
 - **EventEmitter**: For event-based communication
   - Observer pattern implementation
   - Non-blocking event dispatch
@@ -74,6 +83,7 @@
   - Loosely coupled component communication
 
 ### Type Safety & Validation
+
 - **Zod**: Runtime type validation
   - Schema definition and validation
   - TypeScript type inference
@@ -84,6 +94,7 @@
   - Integration with TypeScript types
 
 ## State Management
+
 - React Context for global state
 - Component-level state for UI elements
 - Event-based progress tracking
@@ -91,7 +102,8 @@
 - Reducer pattern for state transitions
 
 ## Development Tools
+
 - ESLint for code quality
 - TypeScript compiler for type checking
 - Jest for testing
-- Prettier for code formatting 
+- Prettier for code formatting

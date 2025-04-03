@@ -20,6 +20,7 @@ This document outlines the implementation plan for the Unshallow project, focusi
 ### 1. Context Enricher
 
 **Prompt:**
+
 ```
 Implement the Context Enricher module.
 
@@ -33,6 +34,7 @@ This is a core dependency that should be implemented as a standalone module with
 ### 2. LangGraph Workflow
 
 **Prompt:**
+
 ```
 Implement the LangGraph Workflow system.
 
@@ -47,6 +49,7 @@ This is a core dependency that should be implemented as a standalone module with
 ### 3. LangGraph Observer
 
 **Prompt:**
+
 ```
 Implement the LangGraph Observer pattern.
 
@@ -60,6 +63,7 @@ This is a core dependency that should be implemented as a standalone module with
 ### 4. State Management Layer
 
 **Prompt:**
+
 ```
 Implement the State Management Layer.
 
@@ -73,6 +77,7 @@ This should now integrate with the LangGraph Observer to receive events.
 ### 5. Sequential Migration Manager
 
 **Prompt:**
+
 ```
 Implement the Sequential Migration Manager.
 
@@ -87,6 +92,7 @@ This should now integrate with the LangGraph Workflow and LangGraph Observer.
 ### 6. Migration Service
 
 **Prompt:**
+
 ```
 Implement the Migration Service.
 
@@ -106,6 +112,7 @@ Ensure the service passes through custom command options for:
 ### 7. React UI Components
 
 **Prompt:**
+
 ```
 Implement the React UI components.
 
@@ -120,6 +127,7 @@ This should now integrate with the State Management Layer.
 ### 8. CLI Layer
 
 **Prompt:**
+
 ```
 Implement the CLI Layer.
 
@@ -128,4 +136,4 @@ READ THESE SPEC FILES FIRST:
 - tech-stack.md (CLI Framework section)
 
 This is the final integration point that should now integrate with the Migration Service.
-``` 
+```

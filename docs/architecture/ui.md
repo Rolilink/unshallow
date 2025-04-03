@@ -3,11 +3,14 @@
 ## Component Structure
 
 ### Core Components
+
 1. MigrationProvider
+
    - Manages overall migration state
    - Provides context for child components
 
 2. ProgressTracker
+
    - Shows overall progress
    - Displays current file/operation
    - Progress bar component
@@ -19,6 +22,7 @@
    - Success display
 
 ## UI Layout Example
+
 ```
 🔄 Unshallowing Enzyme Tests
 
@@ -38,12 +42,14 @@ Press ^C to cancel
 ```
 
 ## Progress Indicators
+
 - File/Directory progress bar
 - Operation status spinners
 - Success/Error indicators
 - Clear step completion markers
 
 ## Component Hierarchy
+
 ```mermaid
 graph TD
     A[App] --> B[MigrationProvider]
@@ -62,6 +68,7 @@ graph TD
 ```
 
 ## Interactive Elements
+
 - Error resolution prompts
 - Retry confirmations
 - Operation status updates
@@ -70,6 +77,7 @@ graph TD
 ## Summary UI
 
 ### Results Table
+
 ```
 Migration Results Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -113,7 +121,9 @@ Run with --skip-ts-check or --skip-lint-check to bypass checks
 ```
 
 ### Summary Components
+
 1. ResultsTable
+
    - Displays migration status for each file
    - Shows progress through each phase
    - Uses symbols for status (✓, ✗, -)
@@ -126,11 +136,13 @@ Run with --skip-ts-check or --skip-lint-check to bypass checks
    - Includes helpful suggestions
 
 ### Status Symbols
+
 - ✓ Success/Passed
 - ✗ Failed
 - - Skipped/Not Attempted
 
 ### Color Scheme
+
 - Green: Success (✓)
 - Red: Failure (✗)
-- Gray: Skipped (-) 
+- Gray: Skipped (-)

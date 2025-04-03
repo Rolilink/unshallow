@@ -1,6 +1,7 @@
 # Unshallow Workflow Documentation
 
 ## File Handling Flow
+
 ```mermaid
 graph TD
     A[Start Migration] --> B[Clear .attempts folders]
@@ -13,6 +14,7 @@ graph TD
 ```
 
 ## Migration Workflow
+
 ```mermaid
 graph TD
     A[Enzyme Test] --> |"Test + Examples + Context"| B[Context Augmentation]
@@ -35,6 +37,7 @@ graph TD
 ```
 
 ### Directory Structure
+
 ```
 src/
 ├── components/
@@ -58,6 +61,7 @@ src/
 ## Process Steps
 
 ### 1. Initialization
+
 - Clear all `.attempts` folders in the migration scope
   - `.attempts` folders are for developer review only
   - Previous failed attempts are cleared to avoid confusion
@@ -65,6 +69,7 @@ src/
 - Each test file directory gets its own `.attempts` folder
 
 ### 2. Temporary File Creation
+
 - Create temp file with pattern: `{originalName}.temp.tsx`
 - Place temp file in same directory as original test
 - Maintain original file until migration succeeds
@@ -72,6 +77,7 @@ src/
 - Clean up temp files after process completion
 
 ### 3. Migration Process
+
 - Attempt migration on temp file in original directory
 - Run validation steps:
   1. Migration to RTL
@@ -82,12 +88,14 @@ src/
   - Keep temp file for next retry
 
 ### 4. Success Path
+
 - All checks pass:
   1. Delete original file
   2. Rename temp file to original name
   3. Clean up any attempts in `.attempts` folder
 
 ### 5. Failure Path
+
 - Any check fails:
   1. Copy current temp file to `.attempts` folder
   2. Increment retry counter
@@ -100,6 +108,7 @@ src/
      - Original file remains unchanged
 
 ### 6. Cleanup
+
 - Remove all `.temp.tsx` files
 - Keep failed attempts in `.attempts` folders for review
 - Original files remain unchanged if migration fails
@@ -107,6 +116,7 @@ src/
 ## UI Integration
 
 ### Progress Messages
+
 ```
 🔄 Migrating: Button.test.tsx
    Creating temporary file Button.test.temp.tsx...
@@ -118,6 +128,7 @@ src/
 ```
 
 ### Final Summary
+
 ```
 Migration Results Summary
 ...
@@ -140,18 +151,21 @@ Note: Temporary files (.temp.tsx) are automatically cleaned up
 ## Best Practices
 
 ### File Management
+
 1. Keep original files untouched until success
 2. Use `.attempts` folder for post-migration review only
 3. Temporary files live alongside original tests
 4. Clean up all temp files after each run
 
 ### Error Recovery
+
 1. Check `.attempts` folder for failed migrations
 2. Compare with original files
 3. Fix issues manually if needed
 4. Re-run migration on specific files
 
 ### Cleanup
+
 1. Clear `.attempts` folders before new run
 2. Remove all temp files after completion
-3. Keep successful migrations only 
+3. Keep successful migrations only

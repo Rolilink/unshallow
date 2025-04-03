@@ -13,50 +13,50 @@ graph TD
         CLI[CLI Commands]
         MC[Migrate Command]
     end
-    
+
     subgraph "Orchestration Layer"
         MS[Migration Service]
         SMM[SequentialMigrationManager]
         LGO[LangGraphObserver]
         CE[ContextEnricher]
     end
-    
+
     subgraph "Workflow Layer"
         LG[LangGraph]
         FPN[File Processing Nodes]
         LLM[LLM Integration]
     end
-    
+
     subgraph "State Management Layer"
         MContext[MigrationContext]
         MReducer[migrationReducer]
         ULGO[useLangGraphObserver]
     end
-    
+
     subgraph "React UI Layer"
         RC[React Components]
         UCH[useContext Hooks]
     end
-    
+
     %% CLI connections - simple command flow
     CLI --> MC
     MC -->|"calls"| MS
-    
+
     %% Migration Service initializes everything
     MS -->|"initializes"| RC
     MS -->|"configures"| MContext
     MS -->|"creates"| SMM
     MS -->|"sets up"| LGO
     MS -->|"uses"| CE
-    
+
     %% Context enrichment flow
     CE -->|"analyzes imports"| SMM
-    
+
     %% Migration process flow
     SMM -->|"manages"| LG
     LG -->|"uses"| FPN
     FPN -->|"calls"| LLM
-    
+
     %% State observation flow
     LG -.->|"state changes"| LGO
     LGO -.->|"emits events"| MS
@@ -64,13 +64,13 @@ graph TD
     ULGO -.->|"updates"| MContext
     MContext -.->|"provides state"| UCH
     UCH -.->|"consumes"| RC
-    
+
     %% Style settings
     classDef central fill:#f96,stroke:#333,stroke-width:2px;
     classDef primary fill:#bbf,stroke:#33f,stroke-width:1px;
     classDef secondary fill:#ddf,stroke:#33f,stroke-width:1px;
     classDef highlight fill:#fdf,stroke:#939,stroke-width:1px;
-    
+
     %% Apply styles to highlight key components
     class MS central;
     class CE,SMM,LGO,MContext primary;
@@ -89,31 +89,32 @@ sequenceDiagram
     participant UI as React UI
     participant Manager as Sequential Manager
     participant LangGraph
-    
+
     User->>CLI: migrate command
     CLI->>Service: migrateFiles(inputPath, config)
-    
+
     Service->>UI: initialize React application
-    
+
     %% Context enrichment process
     Service->>Context: enrichContext(testFile, importDepth)
     Context->>Context: parse AST
     Context->>Context: identify components
     Context->>Context: resolve imports recursively
     Context-->>Service: return enriched context
-    
+
     Service->>Manager: set up migration manager
     Service->>Manager: process file with context
-    
+
     Manager->>LangGraph: process file with component context
     LangGraph->>UI: update UI state via observer
-    
+
     Manager-->>Service: report completion
     Service-->>CLI: return success/failure
     CLI-->>User: exit with code
 ```
 
 This flow illustrates how:
+
 1. CLI only initiates the process
 2. Migration Service initializes the UI and manages the entire process
 3. ContextEnricher provides rich component information through AST analysis
@@ -180,12 +181,14 @@ This layer presents the migration process to the user but is initialized and con
 ## Responsibility Separation
 
 ### CLI
+
 - Parse command-line arguments
 - Validate input path
 - Call Migration Service
 - Exit with appropriate code
 
 ### Migration Service
+
 - Initialize React UI
 - Set up state management
 - Create and configure SequentialMigrationManager
@@ -194,6 +197,7 @@ This layer presents the migration process to the user but is initialized and con
 - Relay events between components
 
 ### ContextEnricher
+
 - Parse test files using AST
 - Detect components under test
 - Analyze imports recursively
@@ -201,6 +205,7 @@ This layer presents the migration process to the user but is initialized and con
 - Build structured context for LLM
 
 ### SequentialMigrationManager
+
 - Process files one by one
 - Utilize enriched context for better migrations
 - Manage LangGraph instances
@@ -225,4 +230,4 @@ The architecture allows for several extension points:
 2. **Parallel Processing**: Could replace SequentialMigrationManager with a parallel version
 3. **Different UI Technologies**: Could replace React with another UI framework
 4. **Headless Operation**: Can run migrations without any UI attached
-5. **Alternative LLM Integration**: LLM components can be swapped without affecting the architecture 
+5. **Alternative LLM Integration**: LLM components can be swapped without affecting the architecture

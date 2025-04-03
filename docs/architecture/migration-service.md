@@ -18,54 +18,57 @@ The Migration Service acts as the central orchestration component in the applica
 
 ```typescript
 class MigrationService extends EventEmitter {
-  constructor();
-  
-  // Main entry point called by CLI - initializes everything
-  async migrateFiles(inputPath: string, options?: MigrationOptions): Promise<void>;
-  
-  // Stop an ongoing migration
-  stopMigration(): void;
-  
-  // Get current migration stats
-  getMigrationStats(): MigrationStats;
-  
-  // Event registration for internal components
-  on(event: MigrationEventType, handler: Function): void;
-  off(event: MigrationEventType, handler: Function): void;
+	constructor();
+
+	// Main entry point called by CLI - initializes everything
+	async migrateFiles(
+		inputPath: string,
+		options?: MigrationOptions,
+	): Promise<void>;
+
+	// Stop an ongoing migration
+	stopMigration(): void;
+
+	// Get current migration stats
+	getMigrationStats(): MigrationStats;
+
+	// Event registration for internal components
+	on(event: MigrationEventType, handler: Function): void;
+	off(event: MigrationEventType, handler: Function): void;
 }
 
 // Migration options
 interface MigrationOptions {
-  skipTs?: boolean;
-  skipLint?: boolean;
-  maxRetries?: number;
-  pattern?: string;
-  importDepth?: number;
-  exampleTests?: string[];
-  extraContextFile?: string;
-  lintCheckCmd?: string;
-  lintFixCmd?: string;
-  tsCheckCmd?: string;
+	skipTs?: boolean;
+	skipLint?: boolean;
+	maxRetries?: number;
+	pattern?: string;
+	importDepth?: number;
+	exampleTests?: string[];
+	extraContextFile?: string;
+	lintCheckCmd?: string;
+	lintFixCmd?: string;
+	tsCheckCmd?: string;
 }
 
 // Stats interface
 interface MigrationStats {
-  total: number;
-  completed: number;
-  failed: number;
-  inProgress: number;
-  currentFile?: string;
+	total: number;
+	completed: number;
+	failed: number;
+	inProgress: number;
+	currentFile?: string;
 }
 
 // Event types
-type MigrationEventType = 
-  | 'started' 
-  | 'fileStarted' 
-  | 'fileCompleted'
-  | 'fileFailed'
-  | 'completed'
-  | 'failed'
-  | 'progress';
+type MigrationEventType =
+	| 'started'
+	| 'fileStarted'
+	| 'fileCompleted'
+	| 'fileFailed'
+	| 'completed'
+	| 'failed'
+	| 'progress';
 ```
 
 ## AST Import Analysis
@@ -91,7 +94,7 @@ Deeper analysis provides more context but increases processing time. The default
 The Migration Service supports customization of validation commands:
 
 1. **Lint Check Command**: Command to run for ESLint checking (default: "yarn lint:check")
-2. **Lint Fix Command**: Command to run for ESLint fixing (default: "yarn lint:fix") 
+2. **Lint Fix Command**: Command to run for ESLint fixing (default: "yarn lint:fix")
 3. **TypeScript Check Command**: Command to run for TypeScript validation (default: "yarn ts:check")
 
 These commands are passed through from the CLI to the workflow engine, allowing teams to use their own project-specific validation scripts instead of the defaults.
@@ -100,155 +103,157 @@ These commands are passed through from the CLI to the workflow engine, allowing 
 
 ```typescript
 // services/migrationService.ts
-import { EventEmitter } from 'events';
+import {EventEmitter} from 'events';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { App } from '../components/App';
-import { langGraphObserver } from '../langGraph/observer';
-import { SequentialMigrationManager } from '../migration/migrationManager';
+import {App} from '../components/App';
+import {langGraphObserver} from '../langGraph/observer';
+import {SequentialMigrationManager} from '../migration/migrationManager';
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import {glob} from 'glob';
 
 export class MigrationService extends EventEmitter {
-  private manager: SequentialMigrationManager;
-  private observer: typeof langGraphObserver;
-  private uiInitialized: boolean = false;
-  
-  constructor() {
-    super();
-    this.observer = langGraphObserver;
-    this.manager = new SequentialMigrationManager(this.observer);
-    
-    // Set up internal event relaying 
-    this.setupEventRelays();
-  }
-  
-  // Expand path to find test files
-  private async expandPath(inputPath: string, pattern: string): Promise<string[]> {
-    const stats = fs.statSync(inputPath);
-    
-    if (stats.isFile()) {
-      // Single file - check if it's a test file
-      const fileName = path.basename(inputPath);
-      const isTest = /\.(test|spec)\.(ts|tsx)$/.test(fileName);
-      return isTest ? [inputPath] : [];
-    } else if (stats.isDirectory()) {
-      // Directory - find all test files matching the pattern
-      const fullPattern = path.join(inputPath, pattern);
-      const files = await glob(fullPattern);
-      return [...new Set(files)]; // Remove duplicates
-    }
-    
-    return [];
-  }
-  
-  private setupEventRelays() {
-    // Relay events from observer to service consumers
-    this.observer.on('fileStateUpdate', (event) => {
-      this.emit('progress', this.getMigrationStats());
-    });
-    
-    // Other event relays...
-  }
-  
-  // Initialize the React UI
-  private initializeUI() {
-    if (this.uiInitialized) return;
-    
-    // Create a container for the UI
-    const container = document.createElement('div');
-    container.id = 'migration-ui-root';
-    document.body.appendChild(container);
-    
-    // Render the React app
-    ReactDOM.render(
-      <App />,
-      container
-    );
-    
-    this.uiInitialized = true;
-  }
-  
-  async migrateFiles(inputPath: string, options?: MigrationOptions) {
-    try {
-      // 1. Validate path exists
-      if (!fs.existsSync(inputPath)) {
-        throw new Error(`Path does not exist: ${inputPath}`);
-      }
-      
-      // 2. Expand the file path with the provided pattern
-      const pattern = options?.pattern || '**/*.{test,spec}.{ts,tsx}';
-      const filePaths = await this.expandPath(inputPath, pattern);
-      
-      if (filePaths.length === 0) {
-        throw new Error(`No test files found matching pattern '${pattern}' in '${inputPath}'`);
-      }
-      
-      // 3. Initialize the UI
-      this.initializeUI();
-      
-      // 4. Emit started event
-      this.emit('started', { 
-        totalFiles: filePaths.length,
-        files: filePaths,
-        options
-      });
-      
-      // 5. Notify observer that migration is starting
-      this.observer.notifyMigrationStarted(filePaths.length);
-      
-      // 6. Prepare workflow options including custom commands
-      const workflowOptions = {
-        maxRetries: options?.maxRetries || 5,
-        skipTs: options?.skipTs || false,
-        skipLint: options?.skipLint || false,
-        importDepth: options?.importDepth || 1,
-        exampleTests: options?.exampleTests || [],
-        extraContextFile: options?.extraContextFile,
-        lintCheckCmd: options?.lintCheckCmd || 'yarn lint:check',
-        lintFixCmd: options?.lintFixCmd || 'yarn lint:fix',
-        tsCheckCmd: options?.tsCheckCmd || 'yarn ts:check'
-      };
-      
-      // 7. Start the migration process with all options
-      await this.manager.startMigration(filePaths, workflowOptions);
-      
-      // 8. Notify observer that migration completed successfully
-      this.observer.notifyMigrationCompleted();
-      
-      // 9. Return with success (for CLI)
-      return;
-    } catch (error) {
-      // Notify observer that migration failed
-      this.observer.notifyMigrationFailed(error);
-      
-      // Re-throw error for CLI error handling
-      throw error;
-    }
-  }
-  
-  stopMigration() {
-    this.manager.stop();
-  }
-  
-  getMigrationStats(): MigrationStats {
-    const managerStats = this.manager.getStats();
-    
-    return {
-      total: managerStats.total,
-      inProgress: managerStats.currentlyProcessing ? 1 : 0,
-      completed: this.countFilesByStatus('success'),
-      failed: this.countFilesByStatus('failed'),
-      currentFile: managerStats.currentFile
-    };
-  }
-  
-  private countFilesByStatus(status: string): number {
-    // This would normally access state from the observer
-    // but we're simplifying for the example
-    return 0;
-  }
+	private manager: SequentialMigrationManager;
+	private observer: typeof langGraphObserver;
+	private uiInitialized: boolean = false;
+
+	constructor() {
+		super();
+		this.observer = langGraphObserver;
+		this.manager = new SequentialMigrationManager(this.observer);
+
+		// Set up internal event relaying
+		this.setupEventRelays();
+	}
+
+	// Expand path to find test files
+	private async expandPath(
+		inputPath: string,
+		pattern: string,
+	): Promise<string[]> {
+		const stats = fs.statSync(inputPath);
+
+		if (stats.isFile()) {
+			// Single file - check if it's a test file
+			const fileName = path.basename(inputPath);
+			const isTest = /\.(test|spec)\.(ts|tsx)$/.test(fileName);
+			return isTest ? [inputPath] : [];
+		} else if (stats.isDirectory()) {
+			// Directory - find all test files matching the pattern
+			const fullPattern = path.join(inputPath, pattern);
+			const files = await glob(fullPattern);
+			return [...new Set(files)]; // Remove duplicates
+		}
+
+		return [];
+	}
+
+	private setupEventRelays() {
+		// Relay events from observer to service consumers
+		this.observer.on('fileStateUpdate', event => {
+			this.emit('progress', this.getMigrationStats());
+		});
+
+		// Other event relays...
+	}
+
+	// Initialize the React UI
+	private initializeUI() {
+		if (this.uiInitialized) return;
+
+		// Create a container for the UI
+		const container = document.createElement('div');
+		container.id = 'migration-ui-root';
+		document.body.appendChild(container);
+
+		// Render the React app
+		ReactDOM.render(<App />, container);
+
+		this.uiInitialized = true;
+	}
+
+	async migrateFiles(inputPath: string, options?: MigrationOptions) {
+		try {
+			// 1. Validate path exists
+			if (!fs.existsSync(inputPath)) {
+				throw new Error(`Path does not exist: ${inputPath}`);
+			}
+
+			// 2. Expand the file path with the provided pattern
+			const pattern = options?.pattern || '**/*.{test,spec}.{ts,tsx}';
+			const filePaths = await this.expandPath(inputPath, pattern);
+
+			if (filePaths.length === 0) {
+				throw new Error(
+					`No test files found matching pattern '${pattern}' in '${inputPath}'`,
+				);
+			}
+
+			// 3. Initialize the UI
+			this.initializeUI();
+
+			// 4. Emit started event
+			this.emit('started', {
+				totalFiles: filePaths.length,
+				files: filePaths,
+				options,
+			});
+
+			// 5. Notify observer that migration is starting
+			this.observer.notifyMigrationStarted(filePaths.length);
+
+			// 6. Prepare workflow options including custom commands
+			const workflowOptions = {
+				maxRetries: options?.maxRetries || 5,
+				skipTs: options?.skipTs || false,
+				skipLint: options?.skipLint || false,
+				importDepth: options?.importDepth || 1,
+				exampleTests: options?.exampleTests || [],
+				extraContextFile: options?.extraContextFile,
+				lintCheckCmd: options?.lintCheckCmd || 'yarn lint:check',
+				lintFixCmd: options?.lintFixCmd || 'yarn lint:fix',
+				tsCheckCmd: options?.tsCheckCmd || 'yarn ts:check',
+			};
+
+			// 7. Start the migration process with all options
+			await this.manager.startMigration(filePaths, workflowOptions);
+
+			// 8. Notify observer that migration completed successfully
+			this.observer.notifyMigrationCompleted();
+
+			// 9. Return with success (for CLI)
+			return;
+		} catch (error) {
+			// Notify observer that migration failed
+			this.observer.notifyMigrationFailed(error);
+
+			// Re-throw error for CLI error handling
+			throw error;
+		}
+	}
+
+	stopMigration() {
+		this.manager.stop();
+	}
+
+	getMigrationStats(): MigrationStats {
+		const managerStats = this.manager.getStats();
+
+		return {
+			total: managerStats.total,
+			inProgress: managerStats.currentlyProcessing ? 1 : 0,
+			completed: this.countFilesByStatus('success'),
+			failed: this.countFilesByStatus('failed'),
+			currentFile: managerStats.currentFile,
+		};
+	}
+
+	private countFilesByStatus(status: string): number {
+		// This would normally access state from the observer
+		// but we're simplifying for the example
+		return 0;
+	}
 }
 
 // Create a singleton instance
@@ -261,33 +266,33 @@ The CLI acts only as an initiator, with no UI or feedback responsibilities:
 
 ```typescript
 // cli/commands/migrate.ts
-import { migrationService } from '../../services/migrationService';
+import {migrationService} from '../../services/migrationService';
 
 export async function handleMigrateCommand(inputPath: string, options: any) {
-  try {
-    // Configure options
-    const config = {
-      skipTs: options.skipTsCheck || false,
-      skipLint: options.skipLintCheck || false,
-      maxRetries: parseInt(options.maxRetries || '5', 10),
-      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
-      importDepth: parseInt(options.importDepth || '1', 10),
-      exampleTests: options.examples ? options.examples.split(',') : undefined,
-      extraContextFile: options.contextFile,
-      lintCheckCmd: options.lintCheckCmd,
-      lintFixCmd: options.lintFixCmd,
-      tsCheckCmd: options.tsCheckCmd
-    };
-    
-    // Start the migration service
-    await migrationService.migrateFiles(inputPath, config);
-    
-    // Exit with success code
-    process.exit(0);
-  } catch (error) {
-    // Exit with error code
-    process.exit(1);
-  }
+	try {
+		// Configure options
+		const config = {
+			skipTs: options.skipTsCheck || false,
+			skipLint: options.skipLintCheck || false,
+			maxRetries: parseInt(options.maxRetries || '5', 10),
+			pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
+			importDepth: parseInt(options.importDepth || '1', 10),
+			exampleTests: options.examples ? options.examples.split(',') : undefined,
+			extraContextFile: options.contextFile,
+			lintCheckCmd: options.lintCheckCmd,
+			lintFixCmd: options.lintFixCmd,
+			tsCheckCmd: options.tsCheckCmd,
+		};
+
+		// Start the migration service
+		await migrationService.migrateFiles(inputPath, config);
+
+		// Exit with success code
+		process.exit(0);
+	} catch (error) {
+		// Exit with error code
+		process.exit(1);
+	}
 }
 ```
 
@@ -302,24 +307,24 @@ sequenceDiagram
     participant Manager as SequentialMigrationManager
     participant AST as AST Analyzer
     participant LangGraph
-    
+
     CLI->>MigrationService: migrateFiles(inputPath, config)
-    
+
     %% Path validation and file discovery
     MigrationService->>MigrationService: validate path exists
     MigrationService->>MigrationService: expandPath(inputPath, pattern)
-    
+
     %% UI initialization
     MigrationService->>MigrationService: initializeUI()
     MigrationService->>UI: render React app
-    
+
     %% Event setup
     MigrationService->>MigrationService: emit 'started' event
     MigrationService->>Observer: notifyMigrationStarted()
-    
+
     %% Start migration process
     MigrationService->>Manager: startMigration(filePaths, options)
-    
+
     %% Process files one by one
     loop For each file
         %% Import analysis
@@ -327,26 +332,26 @@ sequenceDiagram
         AST->>AST: parseAST(file)
         AST->>AST: followImports(recursively)
         AST-->>Manager: componentContext
-        
+
         %% LangGraph processing
         Manager->>LangGraph: create workflow for file
         Manager->>LangGraph: provide component context and commands
         LangGraph->>LangGraph: process file nodes
-        
+
         %% State changes and event flow
         LangGraph-->>Observer: emit state changes
         Observer-->>MigrationService: relay events
         MigrationService-->>UI: update UI state
-        
+
         %% File completion
         LangGraph-->>Manager: file complete
     end
-    
+
     %% Migration completion
     Manager-->>MigrationService: all files processed
     MigrationService->>Observer: notifyMigrationCompleted()
     MigrationService-->>CLI: resolve promise
-    
+
     %% Error handling path (alternative flow)
     rect rgb(255, 240, 240)
         Note over MigrationService,Observer: Error handling flow
@@ -358,24 +363,28 @@ sequenceDiagram
 ### Key Process Stages
 
 1. **Initialization**
+
    - Path validation
    - File pattern expansion
    - UI initialization
    - Event setup
 
 2. **Import Analysis**
+
    - Parse test file AST
    - Identify component imports
    - Follow import chain to specified depth
    - Build component context for LLM
 
 3. **Migration Process**
+
    - Manager starts migration with component context and custom commands
    - Each file is processed through LangGraph
    - State changes are observed and relayed
    - UI is updated with progress
 
 4. **Completion**
+
    - All files processed
    - Final notifications sent
    - Promise resolved
