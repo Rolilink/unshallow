@@ -1,7 +1,13 @@
 {
 	"extends": "@sindresorhus/tsconfig",
 	"compilerOptions": {
-		"outDir": "dist"
+		"outDir": "dist",
+		"esModuleInterop": true,
+		"target": "ESNext",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"allowSyntheticDefaultImports": true,
+		"noImplicitAny": false,
 	},
 	"include": ["source"]
 }

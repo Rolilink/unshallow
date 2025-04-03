@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {Command} from 'commander';
 import {handleMigrateCommand} from './commands/migrate.js';
+import {handleContextEnricherCommand} from './commands/context-enricher.js';
 
 // Create the main program
 const program = new Command()
@@ -43,6 +44,34 @@ program
 	)
 	.action((inputPath, options) => {
 		const exitCode = handleMigrateCommand(inputPath, options);
+		process.exit(exitCode);
+	});
+
+// Add the context-enricher command
+program
+	.command('context-enricher')
+	.description('Analyze a test file and extract contextual information')
+	.argument('<testFilePath>', 'Path to the test file to analyze')
+	.option(
+		'--import-depth <number>',
+		'Depth for AST import analysis',
+		'1'
+	)
+	.option(
+		'--examples <paths>',
+		'Comma-separated list of example tests to use as references'
+	)
+	.option(
+		'--context-file <path>',
+		'Path to a text file with additional context'
+	)
+	.option(
+		'--output-format <format>',
+		'Output format (pretty or json)',
+		'pretty'
+	)
+	.action((testFilePath, options) => {
+		const exitCode = handleContextEnricherCommand(testFilePath, options);
 		process.exit(exitCode);
 	});
 
