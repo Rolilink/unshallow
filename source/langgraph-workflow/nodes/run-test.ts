@@ -4,8 +4,14 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { stripAnsiCodes } from '../utils/openai.js';
 
-const execAsync = promisify(exec);
+// Extended exec type that includes code in the response
+const execAsync = promisify(exec) as (command: string, options?: any) => Promise<{
+  stdout: string;
+  stderr: string;
+  code?: number;
+}>;
 
 /**
  * Runs the RTL test to verify it works
@@ -48,21 +54,62 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
     const testCmd = file.commands.test || 'yarn test';
     const fullCommand = `${testCmd} ${tempFile}`;
 
-    console.log(`[run-test] Executing: ${testCmd}`);
+    console.log(`[run-test] Executing: ${fullCommand}`);
 
-    const { stdout, stderr } = await execAsync(fullCommand);
+    let exitCode = 0;
+    let stdout = '';
+    let stderr = '';
 
-    // Check if the test failed
-    if (stderr && (stderr.includes('fail') || stderr.includes('error'))) {
-      console.log(`[run-test] Test failed`);
+    try {
+      const result = await execAsync(fullCommand);
+      stdout = result.stdout;
+      stderr = result.stderr;
+    } catch (execError: any) {
+      // When a command fails, exec throws an error with the exit code
+      stdout = execError.stdout || '';
+      stderr = execError.stderr || '';
+      exitCode = execError.code || 1;
+
+      console.log(`[run-test] Command failed with exit code: ${exitCode}`);
+
+      // Log the STDERR content for better debugging
+      if (stderr) {
+        console.log(`[run-test] STDERR content:`);
+        console.log(stderr);
+      }
+
+      // Log only a sample of the errors, not the full output
+      const errorLines = stderr.split('\n').filter(line => line.includes('error'));
+      if (errorLines.length > 0) {
+        const errorSample = errorLines.slice(0, 3).join('\n');
+        console.log(`[run-test] Error sample:\n${errorSample}${errorLines.length > 3 ? '\n...' : ''}`);
+      }
+    }
+
+    // Check if the test failed based on exit code
+    if (exitCode !== 0) {
+      console.log(`[run-test] Test failed with exit code: ${exitCode}`);
+
+      // Just collect the raw output without parsing
+      const rawOutput = [
+        `Exit code: ${exitCode}`,
+        '--- STDOUT ---',
+        stdout,
+        '--- STDERR ---',
+        stderr
+      ].join('\n');
+
+      // Clean the output by removing ANSI escape codes
+      const cleanedOutput = stripAnsiCodes(rawOutput);
 
       return {
         file: {
           ...updatedFile,
           testResult: {
             success: false,
-            output: stdout,
-            errors: stderr.split('\n').filter(line => line.trim().length > 0),
+            output: cleanedOutput,
+            errors: [cleanedOutput], // Pass the cleaned output as a single error item
+            exitCode: exitCode
           },
           currentStep: WorkflowStep.RUN_TEST_FAILED,
         },
@@ -77,7 +124,8 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
         ...updatedFile,
         testResult: {
           success: true,
-          output: stdout,
+          output: stripAnsiCodes(stdout), // Clean ANSI codes from successful output too
+          exitCode: 0
         },
         currentStep: WorkflowStep.RUN_TEST,
       },

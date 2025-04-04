@@ -47,6 +47,12 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
 
       console.log(`[ts-validation] Failed with ${errors.length} errors`);
 
+      // Show only a few sample errors
+      if (errors.length > 0) {
+        const sampleErrors = errors.slice(0, 3).join('\n');
+        console.log(`[ts-validation] Error samples:\n${sampleErrors}${errors.length > 3 ? '\n...' : ''}`);
+      }
+
       return {
         file: {
           ...file,

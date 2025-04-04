@@ -22,7 +22,6 @@ export interface MigrateOptions {
   lintFixCmd?: string;
   tsCheckCmd?: string;
   testCmd?: string;
-  apiKey?: string;
 }
 
 /**
@@ -38,7 +37,7 @@ export async function handleMigrateCommand(
 
     // Get API key from config or command line
     const configManager = new ConfigManager();
-    const apiKey = options.apiKey || configManager.getOpenAIKey();
+    const apiKey = configManager.getOpenAIKey();
 
     if (!apiKey) {
       console.error('OpenAI API key is not configured.');
@@ -62,8 +61,7 @@ export async function handleMigrateCommand(
       lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
       lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
       tsCheckCmd: options.tsCheckCmd || 'yarn ts:check',
-      testCmd: options.testCmd || 'yarn test',
-      apiKey
+      testCmd: options.testCmd || 'yarn test'
     };
 
     // Log command execution
@@ -116,8 +114,7 @@ export async function handleMigrateCommand(
         lintCheckCmd: config.lintCheckCmd,
         lintFixCmd: config.lintFixCmd,
         tsCheckCmd: config.tsCheckCmd,
-        testCmd: config.testCmd,
-        apiKey: config.apiKey,
+        testCmd: config.testCmd
       }
     );
 
@@ -131,6 +128,102 @@ export async function handleMigrateCommand(
 
       console.log(`Writing migrated test to: ${outputPath}`);
       await fs.writeFile(outputPath, result.file.rtlTest, 'utf8');
+
+      // Write explanation to a markdown file if available
+      if (result.file.fixExplanation) {
+        const explanationPath = path.join(dirName, `${baseName}.explanation.md`);
+        console.log(`Writing explanation to: ${explanationPath}`);
+
+        // Format different fix histories if available
+        let fixHistoriesSections = '';
+
+        // Format RTL fix history if available
+        if (result.file.rtlFixHistory && result.file.rtlFixHistory.length > 0) {
+          fixHistoriesSections += `
+## RTL Test Fix History
+${result.file.rtlFixHistory.map((attempt) => `
+### Attempt ${attempt.attempt} (${new Date(attempt.timestamp).toLocaleString()})
+
+**Test Code:**
+\`\`\`tsx
+${attempt.testContent}
+\`\`\`
+
+**Error:**
+\`\`\`
+${attempt.error}
+\`\`\`
+
+**Explanation:**
+${attempt.explanation || "No explanation provided."}
+`).join('\n')}
+`;
+        }
+
+        // Format TS fix history if available
+        if (result.file.tsFixHistory && result.file.tsFixHistory.length > 0) {
+          fixHistoriesSections += `
+## TypeScript Fix History
+${result.file.tsFixHistory.map((attempt) => `
+### Attempt ${attempt.attempt} (${new Date(attempt.timestamp).toLocaleString()})
+
+**Test Code:**
+\`\`\`tsx
+${attempt.testContent}
+\`\`\`
+
+**Error:**
+\`\`\`
+${attempt.error}
+\`\`\`
+
+**Explanation:**
+${attempt.explanation || "No explanation provided."}
+`).join('\n')}
+`;
+        }
+
+        // Format Lint fix history if available
+        if (result.file.lintFixHistory && result.file.lintFixHistory.length > 0) {
+          fixHistoriesSections += `
+## Lint Fix History
+${result.file.lintFixHistory.map((attempt) => `
+### Attempt ${attempt.attempt} (${new Date(attempt.timestamp).toLocaleString()})
+
+**Test Code:**
+\`\`\`tsx
+${attempt.testContent}
+\`\`\`
+
+**Error:**
+\`\`\`
+${attempt.error}
+\`\`\`
+
+**Explanation:**
+${attempt.explanation || "No explanation provided."}
+`).join('\n')}
+`;
+        }
+
+        const explanationContent = `# Conversion Explanation for ${baseName}${ext}
+
+${result.file.fixExplanation}
+
+## Original Test
+\`\`\`tsx
+${result.file.content}
+\`\`\`
+
+## Converted Test
+\`\`\`tsx
+${result.file.rtlTest}
+\`\`\`
+${fixHistoriesSections}
+`;
+
+        await fs.writeFile(explanationPath, explanationContent, 'utf8');
+      }
 
       if (result.file.status === 'success') {
         console.log('Migration completed successfully!');

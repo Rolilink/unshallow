@@ -16,6 +16,7 @@
 		"dist"
 	],
 	"dependencies": {
+		"@langchain/community": "^0.3.39",
 		"@langchain/core": "^0.3.43",
 		"@langchain/langgraph": "^0.2.62",
 		"@langchain/openai": "^0.5.2",
@@ -25,7 +26,8 @@
 		"langchain": "^0.3.19",
 		"langfuse-langchain": "^3.37.1",
 		"openai": "^4.91.1",
-		"react": "^18.2.0"
+		"react": "^18.2.0",
+		"zod": "^3.24.2"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^7.0.0",

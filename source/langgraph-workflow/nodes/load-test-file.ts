@@ -13,6 +13,9 @@ export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult
     // Read the test file
     const content = await fs.readFile(file.path, 'utf8');
 
+    // Log without showing the full content
+    console.log(`[load-test-file] File loaded successfully (${content.length} characters)`);
+
     return {
       file: {
         ...file,

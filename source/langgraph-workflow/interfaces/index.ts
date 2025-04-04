@@ -14,7 +14,6 @@ export interface WorkflowOptions {
   lintFixCmd?: string;
   tsCheckCmd?: string;
   testCmd?: string;
-  apiKey?: string;
 }
 
 /**
@@ -71,6 +70,7 @@ export interface TestResult {
   output: string;
   errors?: string[];
   error?: any;
+  exitCode?: number;
 }
 
 /**
@@ -97,6 +97,17 @@ export interface LintCheckResult {
 export type FileStatus = 'pending' | 'in-progress' | 'success' | 'failed';
 
 /**
+ * Interface for a single fix attempt
+ */
+export interface FixAttempt {
+  attempt: number;
+  timestamp: string;
+  testContent: string;
+  error: string;
+  explanation?: string;
+}
+
+/**
  * State for a file being processed
  */
 export interface FileState {
@@ -115,6 +126,12 @@ export interface FileState {
   // Migration outputs
   originalTest: string;
   rtlTest?: string;
+  fixExplanation?: string; // Explanation of fixes made by the LLM
+
+  // Fix history by type
+  rtlFixHistory?: FixAttempt[]; // History of RTL test fix attempts
+  tsFixHistory?: FixAttempt[]; // History of TypeScript fix attempts
+  lintFixHistory?: FixAttempt[]; // History of Lint fix attempts
 
   // Validation results
   testResult?: TestResult;

@@ -149,8 +149,6 @@ export function createWorkflow(
   options: WorkflowOptions = {}
 ): { initialState: WorkflowState, execute: () => Promise<WorkflowState> } {
   const maxRetries = options.maxRetries || 3;
-  // Store API key separately, not in the state
-  const apiKey = options.apiKey;
 
   // Initial file state
   const initialState: WorkflowState = {
@@ -185,21 +183,9 @@ export function createWorkflow(
    */
   const execute = async (): Promise<WorkflowState> => {
     try {
-      // Pass API key separately via context instead of in the state
-      const contextWithApiKey = {
-        apiKey
-      };
-
       // Execute the graph with the initial state
       const result = await enzymeToRtlConverterGraph.invoke(initialState, {
-        callbacks: [langfuseCallbackHandler],
-        configurable: {
-          // Pass API key via configurable context
-          convertToRTL: { apiKey },
-          fix_rtl_error: { apiKey },
-          fix_ts_error: { apiKey },
-          fix_lint_error: { apiKey }
-        }
+        callbacks: [langfuseCallbackHandler]
       });
       return result;
     } catch (error) {
@@ -239,8 +225,17 @@ export async function processSingleFile(
 
   // Execute the workflow
   try {
-		console.log('Executing workflow...');
-    return await execute();
+    console.log('Executing workflow...');
+    const result = await execute();
+
+    // Log explanation if available for better understanding of changes
+    if (result.file.fixExplanation) {
+      console.log('\n=== Explanation of Changes ===');
+      console.log(result.file.fixExplanation);
+      console.log('=============================\n');
+    }
+
+    return result;
   } catch (error) {
     console.error(`Error processing file ${testFilePath}:`, error);
     throw error;
