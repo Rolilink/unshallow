@@ -53,7 +53,8 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
   }
 
   try {
-    const lintErrors = file.lintCheck?.errors?.join('\n') || 'Unknown lint errors';
+    // Use the full output if available, otherwise fall back to joined errors
+    const lintErrors = file.lintCheck?.output || file.lintCheck?.errors?.join('\n') || 'Unknown lint errors';
 
     // Initialize Lint fix history if it doesn't exist
     const lintFixHistory = file.lintFixHistory || [];

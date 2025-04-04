@@ -5,6 +5,12 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+// Define a type for the exec error to handle stdout and stderr properties
+interface ExecError extends Error {
+  stdout?: string;
+  stderr?: string;
+}
+
 /**
  * Runs ESLint checks on the RTL test
  */
@@ -48,11 +54,45 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
 
     console.log(`[lint-check] Executing: ${lintCheckCmd}`);
 
-    const { stderr } = await execAsync(`${lintCheckCmd} ${fileToCheck}`);
+    try {
+      // Try to run the lint check
+      await execAsync(`${lintCheckCmd} ${fileToCheck}`);
 
-    // Check if the lint check found issues
-    if (stderr && stderr.includes('error')) {
-      const errors = stderr.split('\n').filter(line => line.includes('error'));
+      console.log(`[lint-check] Passed`);
+
+      // Lint check passed
+      return {
+        file: {
+          ...file,
+          lintCheck: {
+            success: true,
+            errors: [],
+          },
+          currentStep: WorkflowStep.LINT_CHECK_PASSED,
+        },
+      };
+    } catch (error) {
+      // The lint command failed, which means there are lint errors
+      const lintError = error as ExecError;
+
+      // Extract error message from the error object
+      const errorOutput = lintError.message || '';
+      const stdout = lintError.stdout || '';
+      const stderr = lintError.stderr || '';
+
+      // Combine all potential sources of error messages
+      const combinedOutput = [errorOutput, stdout, stderr].filter(Boolean).join('\n');
+
+      // Get the list of errors
+      let errors: string[] = [];
+      if (combinedOutput) {
+        // Split by line and filter to likely error lines
+        errors = combinedOutput
+          .split('\n')
+          .filter(line => line.trim().length > 0)  // non-empty lines
+          .filter(line => !line.includes('Command failed'))  // exclude the command failed message
+          .filter(line => !line.includes('info Visit')); // exclude yarn info messages
+      }
 
       console.log(`[lint-check] Failed with ${errors.length} errors`);
 
@@ -68,25 +108,12 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
           lintCheck: {
             success: false,
             errors: errors,
+            output: combinedOutput
           },
           currentStep: WorkflowStep.LINT_CHECK_FAILED,
         },
       };
     }
-
-    console.log(`[lint-check] Passed`);
-
-    // Lint check passed
-    return {
-      file: {
-        ...file,
-        lintCheck: {
-          success: true,
-          errors: [],
-        },
-        currentStep: WorkflowStep.LINT_CHECK_PASSED,
-      },
-    };
   } catch (error) {
     console.error(`[lint-check] Error: ${error instanceof Error ? error.message : String(error)}`);
 
