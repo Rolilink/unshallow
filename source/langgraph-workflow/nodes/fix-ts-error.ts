@@ -1,6 +1,6 @@
 import { WorkflowState, WorkflowStep, FixAttempt } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
-import { callOpenAIStructured } from '../utils/openai.js';
+import { callOpenAIStructured, tsFixResponseSchema } from '../utils/openai.js';
 
 /**
  * Formats fix history into a string for the prompt
@@ -144,11 +144,11 @@ Important: You are only allowed to make changes inside the test file. External f
 
     console.log(`[fix-ts-error] Calling OpenAI for fixes with ${tsFixHistory.length} previous attempts as context`);
 
-    // Call OpenAI with the prompt
-    const response = await callOpenAIStructured(prompt);
+    // Call OpenAI with the prompt and TS-specific schema
+    const response = await callOpenAIStructured(prompt, tsFixResponseSchema);
 
-    // Log the explanation without showing test content
-    console.log(`[fix-ts-error] Fix explanation summary: ${response.explanation.substring(0, 100)}...`);
+    // Log the full explanation
+    console.log(`[fix-ts-error] Fix explanation: ${response.explanation}`);
 
     // Return the updated state with the fixed test
     return {

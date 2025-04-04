@@ -46,6 +46,8 @@ export enum WorkflowStep {
   APPLY_CONTEXT = 'APPLY_CONTEXT',
   CONVERT_TO_RTL = 'CONVERT_TO_RTL',
   CONVERT_TO_RTL_FAILED = 'CONVERT_TO_RTL_FAILED',
+  PLAN_RTL_FIX = 'PLAN_RTL_FIX',
+  EXECUTE_RTL_FIX = 'EXECUTE_RTL_FIX',
   RUN_TEST = 'RUN_TEST',
   RUN_TEST_SKIPPED = 'RUN_TEST_SKIPPED',
   RUN_TEST_ERROR = 'RUN_TEST_ERROR',
@@ -108,6 +110,17 @@ export interface FixAttempt {
 }
 
 /**
+ * Interface for a fix plan
+ */
+export interface FixPlan {
+  explanation: string;
+  plan: string;
+  mockingNeeded: boolean;
+  mockStrategy: string;
+  timestamp: string;
+}
+
+/**
  * State for a file being processed
  */
 export interface FileState {
@@ -127,6 +140,10 @@ export interface FileState {
   originalTest: string;
   rtlTest?: string;
   fixExplanation?: string; // Explanation of fixes made by the LLM
+  currentFocus?: string; // Current test being focused on
+
+  // Fix plan for RTL tests
+  fixPlan?: FixPlan; // Plan for fixing RTL tests
 
   // Fix history by type
   rtlFixHistory?: FixAttempt[]; // History of RTL test fix attempts

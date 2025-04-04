@@ -42,7 +42,7 @@ program
 	.option('--skip-ts-check', 'Skip TypeScript checking')
 	.option('--skip-lint-check', 'Skip ESLint checking')
 	.option('--skip-test-run', 'Skip running the test')
-	.option('--max-retries <number>', 'Maximum LLM retries', '5')
+	.option('--max-retries <number>', 'Maximum LLM retries', '15')
 	.option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx}')
 	.option('--import-depth <number>', 'Depth for AST import analysis', '1')
 	.option(

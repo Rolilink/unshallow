@@ -1,6 +1,6 @@
 import { WorkflowState, WorkflowStep, FixAttempt } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
-import { callOpenAIStructured } from '../utils/openai.js';
+import { callOpenAIStructured, lintFixResponseSchema } from '../utils/openai.js';
 
 /**
  * Formats fix history into a string for the prompt
@@ -104,16 +104,16 @@ ${fixHistoryText}
 6. Your explanation should briefly describe what was fixed and why.
 7. For the testContent, return ONLY the fixed test code — no backticks, no comments, and no extra explanation.
 
-Important: Do not modify or assume changes to any external files. Fix only what’s shown.
+Important: Do not modify or assume changes to any external files. Fix only what's shown.
 `;
 
     console.log(`[fix-lint-error] Calling OpenAI for fixes with ${lintFixHistory.length} previous attempts as context`);
 
-    // Call OpenAI with the prompt
-    const response = await callOpenAIStructured(prompt);
+    // Call OpenAI with the prompt and Lint-specific schema
+    const response = await callOpenAIStructured(prompt, lintFixResponseSchema);
 
-    // Log the explanation without showing test content
-    console.log(`[fix-lint-error] Fix explanation summary: ${response.explanation.substring(0, 100)}...`);
+    // Log the full explanation
+    console.log(`[fix-lint-error] Fix explanation: ${response.explanation}`);
 
     // Return the updated state with the fixed test
     return {

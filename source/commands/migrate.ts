@@ -51,7 +51,7 @@ export async function handleMigrateCommand(
       skipTs: options.skipTsCheck || false,
       skipLint: options.skipLintCheck || false,
       skipTest: options.skipTestRun || false,
-      maxRetries: parseInt(options.maxRetries || '3', 10),
+      maxRetries: parseInt(options.maxRetries || '15', 10),
       pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
       importDepth: parseInt(options.importDepth || '1', 10),
       exampleTests: options.examples
@@ -136,6 +136,23 @@ export async function handleMigrateCommand(
 
         // Format different fix histories if available
         let fixHistoriesSections = '';
+
+        // Add fix plan section if available
+        if (result.file.fixPlan) {
+          fixHistoriesSections += `
+## Fix Plan
+**Generated on:** ${new Date(result.file.fixPlan.timestamp).toLocaleString()}
+
+### Error Analysis
+${result.file.fixPlan.explanation}
+
+### Planned Fixes
+${result.file.fixPlan.plan}
+
+### Mocking Strategy
+${result.file.fixPlan.mockingNeeded ? result.file.fixPlan.mockStrategy : "No mocking was required."}
+`;
+        }
 
         // Format RTL fix history if available
         if (result.file.rtlFixHistory && result.file.rtlFixHistory.length > 0) {

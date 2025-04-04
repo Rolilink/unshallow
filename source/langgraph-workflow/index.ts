@@ -3,7 +3,8 @@ import { loadTestFileNode } from './nodes/load-test-file.js';
 import { applyContextNode } from './nodes/apply-context.js';
 import { convertToRTLNode } from './nodes/convert-to-rtl.js';
 import { runTestNode } from './nodes/run-test.js';
-import { fixRtlNode } from './nodes/fix-rtl-error.js';
+import { planRtlFixNode } from './nodes/plan-rtl-fix.js';
+import { executeRtlFixNode } from './nodes/execute-rtl-fix.js';
 import { tsValidationNode } from './nodes/ts-validation.js';
 import { fixTsErrorNode } from './nodes/fix-ts-error.js';
 import { lintCheckNode } from './nodes/lint-check.js';
@@ -67,7 +68,8 @@ graph.addNode("load_test_file", loadTestFileNode)
 	.addNode("apply_context", applyContextNode)
 	.addNode("convert_to_rtl", convertToRTLNode)
 	.addNode("run_test", runTestNode)
-	.addNode("fix_rtl_error", fixRtlNode)
+	.addNode("plan_rtl_fix", planRtlFixNode)
+	.addNode("execute_rtl_fix", executeRtlFixNode)
 	.addNode("ts_validation", tsValidationNode)
 	.addNode("fix_ts_error", fixTsErrorNode)
 	.addNode("lint_check", lintCheckNode)
@@ -94,16 +96,17 @@ graph.addNode("load_test_file", loadTestFileNode)
     "run_test",
     (state) => {
       if (hasTestPassed(state)) return "test_passed";
-      if (hasTestFailed(state) && !hasExceededRetries(state)) return "fix_rtl_error";
+      if (hasTestFailed(state) && !hasExceededRetries(state)) return "plan_rtl_fix";
       return "end";
     },
     {
       test_passed: "ts_validation",
-      fix_rtl_error: "fix_rtl_error",
+      plan_rtl_fix: "plan_rtl_fix",
       end: END
     }
   )
-  .addEdge("fix_rtl_error", "run_test")
+  .addEdge("plan_rtl_fix", "execute_rtl_fix")
+  .addEdge("execute_rtl_fix", "run_test")
   .addConditionalEdges(
     "ts_validation",
     (state) => {
@@ -148,7 +151,7 @@ export function createWorkflow(
   context: EnrichedContext,
   options: WorkflowOptions = {}
 ): { initialState: WorkflowState, execute: () => Promise<WorkflowState> } {
-  const maxRetries = options.maxRetries || 3;
+  const maxRetries = options.maxRetries || 15;
 
   // Initial file state
   const initialState: WorkflowState = {
@@ -183,9 +186,10 @@ export function createWorkflow(
    */
   const execute = async (): Promise<WorkflowState> => {
     try {
-      // Execute the graph with the initial state
+      // Execute the graph with the initial state and set recursion limit to 100
       const result = await enzymeToRtlConverterGraph.invoke(initialState, {
-        callbacks: [langfuseCallbackHandler]
+        callbacks: [langfuseCallbackHandler],
+        recursionLimit: 100
       });
       return result;
     } catch (error) {

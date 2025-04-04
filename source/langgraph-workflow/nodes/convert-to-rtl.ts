@@ -39,7 +39,7 @@ Instructions:
 7. Do not test implementation details such as CSS class names, inline styles, or internal component logic.
 8. Avoid mocking internal components or logic unless absolutely necessary. Favor integration-style testing.
 9. Do not use snapshot testing.
-10. Focus on testing the component from the user’s perspective, simulating real interactions.
+10. Focus on testing the component from the user's perspective, simulating real interactions.
 11. Your explanation should include:
     - A summary of what was changed.
     - Which Enzyme patterns were replaced and why.
@@ -75,8 +75,8 @@ Do not use CSS selectors, class names, or style-based queries. Avoid testing imp
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured(prompt);
 
-    // Log the explanation without showing test content
-    console.log(`[convert-to-rtl] Conversion explanation summary: ${response.explanation.substring(0, 100)}...`);
+    // Log the full explanation
+    console.log(`[convert-to-rtl] Conversion explanation: ${response.explanation}`);
 
     // Return the updated state with the generated test
     return {

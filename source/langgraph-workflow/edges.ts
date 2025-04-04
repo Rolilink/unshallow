@@ -51,9 +51,9 @@ export function hasExceededRetries(state: WorkflowState): boolean {
 
   // Check if any retry count exceeds the max
   return (
-    retries.rtl > maxRetries ||
-    retries.test > maxRetries ||
-    retries.ts > maxRetries ||
-    retries.lint > maxRetries
+    retries.rtl >= maxRetries ||
+    retries.test >= maxRetries ||
+    retries.ts >= maxRetries ||
+    retries.lint >= maxRetries
   );
 }

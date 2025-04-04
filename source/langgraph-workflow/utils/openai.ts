@@ -28,22 +28,68 @@ export function stripAnsiCodes(text: string): string {
 }
 
 /**
- * Define the schema for the structured output
+ * Define the schema for the RTL fix response
  */
-export const fixResponseSchema = z.object({
+export const rtlFixResponseSchema = z.object({
   explanation: z.string().describe("Explanation of what changes were made to fix the issues"),
-  testContent: z.string().describe("The fixed test content that addresses all the errors")
+  testContent: z.string().describe("The fixed test content that addresses the errors"),
+  focusedTest: z.string().describe("The name of the specific test that was fixed in this attempt")
 });
 
-export type FixResponse = z.infer<typeof fixResponseSchema>;
+/**
+ * Define the schema for the RTL fix planner response
+ */
+export const rtlFixPlannerSchema = z.object({
+  explanation: z.string().describe("A concise explanation of why the tests are failing"),
+  plan: z.string().describe("A bullet-pointed string describing the fix steps"),
+  mockingNeeded: z.boolean().describe("Whether mocking is needed"),
+  mockStrategy: z.string().describe("Description of what should be mocked or how providers should be wrapped")
+});
+
+/**
+ * Define the schema for the RTL fix executor response
+ */
+export const rtlFixExecutorSchema = z.object({
+  testContent: z.string().describe("The fixed test content that addresses the errors"),
+  explanation: z.string().describe("Explanation of changes made to implement the plan")
+});
+
+/**
+ * Define the schema for the TypeScript fix response
+ */
+export const tsFixResponseSchema = z.object({
+  explanation: z.string().describe("Explanation of what changes were made to fix the TypeScript issues"),
+  testContent: z.string().describe("The fixed test content that addresses the TypeScript errors")
+});
+
+/**
+ * Define the schema for the lint fix response
+ */
+export const lintFixResponseSchema = z.object({
+  explanation: z.string().describe("Explanation of what changes were made to fix the lint issues"),
+  testContent: z.string().describe("The fixed test content that addresses the lint errors")
+});
+
+// For backward compatibility
+export const fixResponseSchema = rtlFixResponseSchema;
+
+export type RtlFixResponse = z.infer<typeof rtlFixResponseSchema>;
+export type RtlFixPlannerResponse = z.infer<typeof rtlFixPlannerSchema>;
+export type RtlFixExecutorResponse = z.infer<typeof rtlFixExecutorSchema>;
+export type TsFixResponse = z.infer<typeof tsFixResponseSchema>;
+export type LintFixResponse = z.infer<typeof lintFixResponseSchema>;
+export type FixResponse = RtlFixResponse | TsFixResponse | LintFixResponse | RtlFixPlannerResponse | RtlFixExecutorResponse;
 
 /**
  * Calls OpenAI with the given prompt and returns structured output
  */
-export async function callOpenAIStructured(prompt: string): Promise<FixResponse> {
+export async function callOpenAIStructured<T extends z.ZodType>(
+  prompt: string,
+  schema: T = rtlFixResponseSchema as any
+): Promise<z.infer<T>> {
   try {
     // Create the parser
-    const parser = StructuredOutputParser.fromZodSchema(fixResponseSchema);
+    const parser = StructuredOutputParser.fromZodSchema(schema);
 
     // Get the format instructions
     const formatInstructions = parser.getFormatInstructions();
