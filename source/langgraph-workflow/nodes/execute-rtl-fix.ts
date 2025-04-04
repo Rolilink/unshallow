@@ -3,16 +3,16 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAIStructured, rtlFixExecutorSchema } from '../utils/openai.js';
 
 /**
- * Formats fix history into a string for the prompt
+ * Formats previous code attempts for the prompt
  */
-function formatFixHistory(history: FixAttempt[]): string {
+function formatPreviousCodeAttempts(history: FixAttempt[]): string {
   if (!history || history.length === 0) {
     return "No previous fix attempts.";
   }
 
   return history.map((attempt) => {
     return `
-### Fix Attempt ${attempt.attempt}
+### Code Attempt ${attempt.attempt}
 **Timestamp:** ${attempt.timestamp}
 
 **Code:**
@@ -65,14 +65,20 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
         timestamp: new Date().toISOString(),
         testContent: file.rtlTest,
         error: testError,
-        explanation: file.fixExplanation
+        explanation: file.fixExplanation,
+        plan: file.fixPlan ? {
+          explanation: file.fixPlan.explanation,
+          plan: file.fixPlan.plan,
+          mockingNeeded: file.fixPlan.mockingNeeded,
+          mockStrategy: file.fixPlan.mockStrategy
+        } : undefined
       });
 
       console.log(`[execute-rtl-fix] Added attempt ${file.retries.rtl} to RTL fix history (${rtlFixHistory.length} total attempts)`);
     }
 
-    // Format fix history for the prompt
-    const fixHistoryText = formatFixHistory(rtlFixHistory);
+    // Format previous code attempts for the prompt (not plans)
+    const previousCodeAttemptsText = formatPreviousCodeAttempts(rtlFixHistory);
 
     // Convert the fix plan to JSON string for the prompt
     const fixPlanJSON = JSON.stringify({
@@ -81,6 +87,31 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       mockingNeeded: file.fixPlan.mockingNeeded,
       mockStrategy: file.fixPlan.mockStrategy
     }, null, 2);
+
+    // Format examples section if available
+    let examplesSection = '';
+    if (file.context.examples && Object.keys(file.context.examples).length > 0) {
+      examplesSection = `
+## Example RTL Tests
+These are examples of successful RTL tests in the codebase that you can reference:
+
+${Object.entries(file.context.examples).map(([filename, content]) => `
+### ${filename}
+\`\`\`tsx
+${content}
+\`\`\`
+`).join('\n')}
+`;
+    }
+
+    // Format extra context if available
+    let extraContextSection = '';
+    if (file.context.extraContext) {
+      extraContextSection = `
+## Additional Context
+${file.context.extraContext}
+`;
+    }
 
     // Generate the prompt for executing fixes
     const executorPrompt = `
@@ -101,9 +132,16 @@ This JSON contains the planner's instructions:
 \`\`\`json
 ${fixPlanJSON}
 \`\`\`
+${examplesSection}${extraContextSection}
+## Previous Code Implementations
+${previousCodeAttemptsText}
 
-## Previous Fix Attempts
-${fixHistoryText}
+## Learning from Previous Attempts
+Study the previous code implementations carefully. Previous approaches have failed to resolve the issues. Your implementation MUST:
+- Avoid repeating the same coding patterns that have already been tried and failed
+- Apply the current fix plan with a fresh implementation approach
+- Take a different coding approach when previous similar implementations have failed
+- Focus on the specific issues highlighted in the current plan
 
 ## Mocking & Provider Guidelines
 
@@ -150,15 +188,16 @@ Fallback to lower-priority queries only if needed for test stability.
 
 ## Instructions
 
-1. Modify only the test file and fix all the failing tests as described in the plan. Do not alter any other tests or parts of the file.
-2. Do not modify component code, project configuration, or dependencies.
-3. Apply any mocks or provider wrappers exactly as described in the fix plan.
-4. Ensure that all test file imports are correct and complete.
-5. Use the \`screen\` object for queries.
-6. Use \`userEvent\` for simulating user interactions.
-7. For asynchronous operations, use \`findBy\` queries or wrap assertions with \`waitFor\`.
-8. Do not use snapshot testing or assertions based solely on CSS classes or styles.
-9. Follow the query priority guidelines provided above.
+1. Implement the fix plan while explicitly avoiding approaches that have already been tried and failed in previous attempts.
+2. Modify only the test file and fix all the failing tests as described in the plan. Do not alter other tests or parts of the file.
+3. Do not modify component code, project configuration, or dependencies.
+4. Apply any mocks or provider wrappers exactly as described in the fix plan.
+5. Ensure that all test file imports are correct and complete.
+6. Use the \`screen\` object for queries.
+7. Use \`userEvent\` for simulating user interactions.
+8. For asynchronous operations, use \`findBy\` queries or wrap assertions with \`waitFor\`.
+9. Do not use snapshot testing or assertions based solely on CSS classes or styles.
+10. Follow the query priority guidelines provided above.
 
 ## Output
 

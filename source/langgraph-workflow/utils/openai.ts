@@ -70,15 +70,35 @@ export const lintFixResponseSchema = z.object({
   testContent: z.string().describe("The fixed test content that addresses the lint errors")
 });
 
+/**
+ * Define the schema for the RTL conversion planner response
+ */
+export const rtlConversionPlannerSchema = z.object({
+  explanation: z.string().describe("A concise explanation of the Enzyme test's structure and what needs to be converted"),
+  plan: z.string().describe("A bullet-pointed string describing the conversion steps"),
+  mockingNeeded: z.boolean().describe("Whether mocking is needed"),
+  mockStrategy: z.string().describe("Description of what should be mocked or how providers should be wrapped")
+});
+
+/**
+ * Define the schema for the RTL conversion executor response
+ */
+export const rtlConversionExecutorSchema = z.object({
+  testContent: z.string().describe("The complete, converted RTL test content"),
+  explanation: z.string().describe("Explanation of the conversion process and implementation details")
+});
+
 // For backward compatibility
 export const fixResponseSchema = rtlFixResponseSchema;
 
 export type RtlFixResponse = z.infer<typeof rtlFixResponseSchema>;
 export type RtlFixPlannerResponse = z.infer<typeof rtlFixPlannerSchema>;
 export type RtlFixExecutorResponse = z.infer<typeof rtlFixExecutorSchema>;
+export type RtlConversionPlannerResponse = z.infer<typeof rtlConversionPlannerSchema>;
+export type RtlConversionExecutorResponse = z.infer<typeof rtlConversionExecutorSchema>;
 export type TsFixResponse = z.infer<typeof tsFixResponseSchema>;
 export type LintFixResponse = z.infer<typeof lintFixResponseSchema>;
-export type FixResponse = RtlFixResponse | TsFixResponse | LintFixResponse | RtlFixPlannerResponse | RtlFixExecutorResponse;
+export type FixResponse = RtlFixResponse | TsFixResponse | LintFixResponse | RtlFixPlannerResponse | RtlFixExecutorResponse | RtlConversionPlannerResponse | RtlConversionExecutorResponse;
 
 /**
  * Calls OpenAI with the given prompt and returns structured output

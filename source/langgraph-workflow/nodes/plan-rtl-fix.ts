@@ -3,30 +3,37 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAIStructured, rtlFixPlannerSchema, stripAnsiCodes } from '../utils/openai.js';
 
 /**
- * Formats fix history into a string for the prompt
+ * Formats previous plans into a string for the prompt
  */
-function formatFixHistory(history: FixAttempt[]): string {
+function formatPreviousPlans(history: FixAttempt[]): string {
   if (!history || history.length === 0) {
-    return "No previous fix attempts.";
+    return "No previous fix plans.";
   }
 
-  return history.map((attempt) => {
+  return history.map((attempt, index) => {
+    if (!attempt.plan) {
+      return `### Fix Plan ${index + 1} (Attempt ${attempt.attempt})
+No plan data available for this attempt.
+`;
+    }
+
     return `
-### Fix Attempt ${attempt.attempt}
+### Fix Plan ${index + 1} (Attempt ${attempt.attempt})
 **Timestamp:** ${attempt.timestamp}
 
-**Code:**
-\`\`\`tsx
-${attempt.testContent}
-\`\`\`
+**Error Analysis:**
+${attempt.plan.explanation}
 
-**Resulting Error:**
+**Fix Strategy:**
+${attempt.plan.plan}
+
+**Mocking Strategy:**
+${attempt.plan.mockingNeeded ? attempt.plan.mockStrategy : "No mocking was required."}
+
+**Resulting Error (after implementation):**
 \`\`\`
 ${attempt.error}
 \`\`\`
-
-**Explanation of Changes:**
-${attempt.explanation || "No explanation provided."}
 `;
   }).join("\n");
 }
@@ -59,8 +66,33 @@ export const planRtlFixNode = async (state: WorkflowState): Promise<NodeResult> 
     // Initialize RTL fix history if it doesn't exist
     const rtlFixHistory = file.rtlFixHistory || [];
 
-    // Format fix history for the prompt
-    const fixHistoryText = formatFixHistory(rtlFixHistory);
+    // Format previous plans for the prompt (not full fix history)
+    const previousPlansText = formatPreviousPlans(rtlFixHistory);
+
+    // Format examples section if available
+    let examplesSection = '';
+    if (file.context.examples && Object.keys(file.context.examples).length > 0) {
+      examplesSection = `
+## Example RTL Tests
+These are examples of successful RTL tests in the codebase:
+
+${Object.entries(file.context.examples).map(([filename, content]) => `
+### ${filename}
+\`\`\`tsx
+${content}
+\`\`\`
+`).join('\n')}
+`;
+    }
+
+    // Format extra context if available
+    let extraContextSection = '';
+    if (file.context.extraContext) {
+      extraContextSection = `
+## Additional Context
+${file.context.extraContext}
+`;
+    }
 
     // Generate the prompt for analysis and planning
     const plannerPrompt = `
@@ -80,30 +112,33 @@ ${file.rtlTest}
 \`\`\`
 ${testError}
 \`\`\`
-
-## Previous Fix Attempts
-${fixHistoryText}
+${examplesSection}${extraContextSection}
+## Previous Fix Plans
+${previousPlansText}
 
 ## Task
 
 1. Analyze the test error output to identify all the issues.
-2. Summarize the reasons why these tests are failing - be concise but complete.
-3. Create a bullet-point plan for fixing all the issues. Be specific about:
+2. Carefully review the previous fix plans to understand what strategies have already been tried and why they failed.
+3. Summarize the reasons why these tests are failing - be concise but complete.
+4. Create a bullet-point plan for fixing all the issues, explicitly avoiding approaches that were already tried and failed. Be specific about:
    - What aspects of the tests need to change
    - Which queries should be used
    - How event handling should be modified
    - What assertions need to be updated
    - Any other required changes
 
-4. Determine if mocking is needed. If so, describe:
+5. Determine if mocking is needed. If so, describe:
    - What needs to be mocked
    - How the mocks should be implemented
    - If any providers are needed
 
 DO NOT provide any code in your response. Focus on analysis and planning only.
 
-## Guidelines
+## Additional Guidelines
 
+- DO NOT repeat strategies that have already been tried and failed in previous attempts
+- If you see patterns of failure in previous plans, use that knowledge to inform a new approach
 - React Testing Library is centered on testing components as users would interact with them
 - Prefer queries that reflect user behavior: getByRole, getByLabelText, getByText
 - Use userEvent for interactions over fireEvent when possible
@@ -138,6 +173,7 @@ DO NOT provide any code in your response. Focus on analysis and planning only.
       file: {
         ...file,
         fixPlan,
+        rtlFixHistory,
         currentStep: WorkflowStep.PLAN_RTL_FIX,
       },
     };

@@ -44,6 +44,8 @@ export enum WorkflowStep {
   LOAD_TEST_FILE = 'LOAD_TEST_FILE',
   LOAD_TEST_FILE_FAILED = 'LOAD_TEST_FILE_FAILED',
   APPLY_CONTEXT = 'APPLY_CONTEXT',
+  PLAN_RTL_CONVERSION = 'PLAN_RTL_CONVERSION',
+  EXECUTE_RTL_CONVERSION = 'EXECUTE_RTL_CONVERSION',
   CONVERT_TO_RTL = 'CONVERT_TO_RTL',
   CONVERT_TO_RTL_FAILED = 'CONVERT_TO_RTL_FAILED',
   PLAN_RTL_FIX = 'PLAN_RTL_FIX',
@@ -107,6 +109,12 @@ export interface FixAttempt {
   testContent: string;
   error: string;
   explanation?: string;
+  plan?: {
+    explanation: string;
+    plan: string;
+    mockingNeeded: boolean;
+    mockStrategy: string;
+  };
 }
 
 /**

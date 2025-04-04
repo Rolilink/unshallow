@@ -1,7 +1,8 @@
 import { EnrichedContext, LintCheckResult, TestResult, TsCheckResult, WorkflowOptions, WorkflowState, WorkflowStep, FileStatus } from './interfaces/index.js';
 import { loadTestFileNode } from './nodes/load-test-file.js';
 import { applyContextNode } from './nodes/apply-context.js';
-import { convertToRTLNode } from './nodes/convert-to-rtl.js';
+import { planRtlConversionNode } from './nodes/plan-rtl-conversion.js';
+import { executeRtlConversionNode } from './nodes/execute-rtl-conversion.js';
 import { runTestNode } from './nodes/run-test.js';
 import { planRtlFixNode } from './nodes/plan-rtl-fix.js';
 import { executeRtlFixNode } from './nodes/execute-rtl-fix.js';
@@ -66,7 +67,8 @@ export const graph = new StateGraph(
 // Add all nodes to the graph
 graph.addNode("load_test_file", loadTestFileNode)
 	.addNode("apply_context", applyContextNode)
-	.addNode("convert_to_rtl", convertToRTLNode)
+	.addNode("plan_rtl_conversion", planRtlConversionNode)
+	.addNode("execute_rtl_conversion", executeRtlConversionNode)
 	.addNode("run_test", runTestNode)
 	.addNode("plan_rtl_fix", planRtlFixNode)
 	.addNode("execute_rtl_fix", executeRtlFixNode)
@@ -83,9 +85,17 @@ graph.addNode("load_test_file", loadTestFileNode)
       apply_context: "apply_context"
     }
   )
-  .addEdge("apply_context", "convert_to_rtl")
+  .addEdge("apply_context", "plan_rtl_conversion")
   .addConditionalEdges(
-    "convert_to_rtl",
+    "plan_rtl_conversion",
+    (state) => state.file.status === "failed" ? "end" : "execute_rtl_conversion",
+    {
+      end: END,
+      execute_rtl_conversion: "execute_rtl_conversion"
+    }
+  )
+  .addConditionalEdges(
+    "execute_rtl_conversion",
     (state) => state.file.status === "failed" ? "end" : "run_test",
     {
       end: END,
