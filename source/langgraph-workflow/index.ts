@@ -132,8 +132,8 @@ graph.addNode("load_test_file", loadTestFileNode)
       return "end";
     },
     {
-      skip_lint: "lint_check",
-      lint_passed: "lint_check",
+      skip_lint: END,
+      lint_passed: END,
       fix_lint_error: "fix_lint_error",
       end: END
     }
