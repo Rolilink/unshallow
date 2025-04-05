@@ -75,9 +75,7 @@ export const lintFixResponseSchema = z.object({
  */
 export const rtlConversionPlannerSchema = z.object({
   explanation: z.string().describe("A concise explanation of the Enzyme test's structure and what needs to be converted"),
-  plan: z.string().describe("A bullet-pointed string describing the conversion steps"),
-  mockingNeeded: z.boolean().describe("Whether mocking is needed"),
-  mockStrategy: z.string().describe("Description of what should be mocked or how providers should be wrapped")
+  plan: z.string().describe("The XML plan describing how to convert the test")
 });
 
 /**
@@ -102,11 +100,19 @@ export type FixResponse = RtlFixResponse | TsFixResponse | LintFixResponse | Rtl
 
 /**
  * Calls OpenAI with the given prompt and returns structured output
+ * Updated to support different model parameters
  */
-export async function callOpenAIStructured<T extends z.ZodType>(
-  prompt: string,
-  schema: T = rtlFixResponseSchema as any
-): Promise<z.infer<T>> {
+export async function callOpenAIStructured<T extends z.ZodType>({
+  prompt,
+  schema,
+  model = 'gpt-4o-mini',
+  temperature
+}: {
+  prompt: string;
+  schema: T;
+  model?: string;
+  temperature?: number;
+}): Promise<z.infer<T>> {
   try {
     // Create the parser
     const parser = StructuredOutputParser.fromZodSchema(schema);
@@ -114,15 +120,22 @@ export async function callOpenAIStructured<T extends z.ZodType>(
     // Get the format instructions
     const formatInstructions = parser.getFormatInstructions();
 
-    // Configure the LLM
-    const llm = new ChatOpenAI({
-      temperature: 0.2,
-      modelName: 'gpt-4o-mini',
+    // Configure the LLM with appropriate options for the model
+    const llmOptions: any = {
+      modelName: model,
       openAIApiKey: getApiKey(),
       callbacks: [langfuseCallbackHandler],
-    });
+    };
+
+    // Only add temperature for models that support it
+    if (model !== 'o3-mini' && temperature !== undefined) {
+      llmOptions.temperature = temperature;
+    }
+
+    const llm = new ChatOpenAI(llmOptions);
 
     // Create a manual prompt that combines the user prompt and format instructions
+    // Note: In the future, we might want to use the XML format in the prompts instead
     const fullPrompt = `${prompt}\n\n${formatInstructions}`;
 
     // Use the LLM directly with structured output

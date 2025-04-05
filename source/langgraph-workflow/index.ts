@@ -11,8 +11,6 @@ import { fixTsErrorNode } from './nodes/fix-ts-error.js';
 import { lintCheckNode } from './nodes/lint-check.js';
 import { fixLintErrorNode } from './nodes/fix-lint-error.js';
 import {
-  hasTestFailed,
-  hasTestPassed,
   hasTsCheckFailed,
   hasTsCheckPassed,
   hasLintCheckFailed,
@@ -21,6 +19,8 @@ import {
 } from './edges.js';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { langfuseCallbackHandler } from '../langsmith.js';
+import { reflectionNode } from './nodes/reflection.js';
+import { summarizeAttemptsNode } from './nodes/summarize-attempts.js';
 
 
 type FileState = {
@@ -76,6 +76,8 @@ graph.addNode("load_test_file", loadTestFileNode)
 	.addNode("fix_ts_error", fixTsErrorNode)
 	.addNode("lint_check", lintCheckNode)
 	.addNode("fix_lint_error", fixLintErrorNode)
+  .addNode("reflection", reflectionNode)
+  .addNode("summarize_attempts", summarizeAttemptsNode)
   .addEdge(START, "load_test_file")
   .addConditionalEdges(
     "load_test_file",
@@ -105,14 +107,18 @@ graph.addNode("load_test_file", loadTestFileNode)
   .addConditionalEdges(
     "run_test",
     (state) => {
-      if (hasTestPassed(state)) return "test_passed";
-      if (hasTestFailed(state) && !hasExceededRetries(state)) return "plan_rtl_fix";
-      return "end";
+      if (state.file.currentStep === WorkflowStep.RUN_TEST_PASSED) {
+        return "validate_typescript";
+      } else if (state.file.currentStep === WorkflowStep.RUN_TEST_FAILED) {
+        return "reflection";
+      } else {
+        return "run_test";
+      }
     },
     {
-      test_passed: "ts_validation",
-      plan_rtl_fix: "plan_rtl_fix",
-      end: END
+      validate_typescript: "ts_validation",
+      reflection: "reflection",
+      run_test: "run_test"
     }
   )
   .addEdge("plan_rtl_fix", "execute_rtl_fix")
@@ -148,7 +154,22 @@ graph.addNode("load_test_file", loadTestFileNode)
       end: END
     }
   )
-  .addEdge("fix_lint_error", "lint_check");
+  .addEdge("fix_lint_error", "lint_check")
+  .addEdge("reflection", "summarize_attempts")
+  .addConditionalEdges(
+    "summarize_attempts",
+    (state) => {
+      // After summarizing, always proceed to plan RTL fix if we haven't exceeded retries
+      if (!hasExceededRetries(state)) {
+        return "continue_fixing";
+      }
+      return "end";
+    },
+    {
+      continue_fixing: "plan_rtl_fix",
+      end: END
+    }
+  );
 
 // Compile the graph
 const enzymeToRtlConverterGraph = graph.compile();
@@ -185,9 +206,9 @@ export function createWorkflow(
         test: options.testCmd || 'yarn test',
       },
       originalTest: '',
-      skipTs: options.skipTs || false,
-      skipLint: options.skipLint || false,
-      skipTest: options.skipTest || false,
+      skipTs: options?.skipTs || false,
+      skipLint: options?.skipLint || false,
+      skipTest: options?.skipTest || false,
     },
   };
 

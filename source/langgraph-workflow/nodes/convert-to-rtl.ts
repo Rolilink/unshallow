@@ -1,6 +1,12 @@
 import { NodeResult } from '../interfaces/node.js';
 import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
-import { callOpenAIStructured } from '../utils/openai.js';
+import { callOpenAIStructured, rtlConversionExecutorSchema } from '../utils/openai.js';
+import { PromptTemplate } from "@langchain/core/prompts";
+import { executeRtlConversionPrompt } from '../prompts/execute-rtl-conversion-prompt.js';
+import { migrationGuidelines } from '../prompts/migration-guidelines.js';
+
+// Create a PromptTemplate for the RTL conversion prompt
+export const executeRtlConversionTemplate = PromptTemplate.fromTemplate(executeRtlConversionPrompt);
 
 /**
  * Converts the Enzyme test to React Testing Library
@@ -11,69 +17,24 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
   console.log(`[convert-to-rtl] Converting: ${file.path}`);
 
   try {
-    // Generate the prompt for conversion
-    const prompt = `
-Act as a senior React developer with experience in TypeScript, Enzyme, and React Testing Library. Your task is to convert the following Enzyme test to React Testing Library.
-
-Tested Component:
-\`\`\`tsx
-${file.context.componentCode}
-\`\`\`
-
-Original Enzyme Test:
-\`\`\`tsx
-${file.content}
-\`\`\`
-
-Additional Instructions:
-${file.componentContext || 'No additional instructions provided.'}
-
-Instructions:
-
-1. Rewrite the Enzyme test using React Testing Library.
-2. Update all imports to match RTL usage.
-3. Use queries and assertions that follow accessibility best practices and React Testing Library's guiding principles.
-4. Use the \`screen\` object for all queries (e.g., \`screen.getByRole(...)\`).
-5. Simulate user interactions using \`userEvent\` instead of \`fireEvent\`.
-6. For async elements or effects, use \`findBy\` queries or wrap assertions with \`waitFor\`.
-7. Do not test implementation details such as CSS class names, inline styles, or internal component logic.
-8. Avoid mocking internal components or logic unless absolutely necessary. Favor integration-style testing.
-9. Do not use snapshot testing.
-10. Focus on testing the component from the user's perspective, simulating real interactions.
-11. Your explanation should include:
-    - A summary of what was changed.
-    - Which Enzyme patterns were replaced and why.
-    - Why specific React Testing Library patterns were chosen.
-12. For the \`testContent\`, return ONLY the converted test code. Do not include backticks, file names, or any additional explanation.
-
-Query Priority Guidelines:
-
-Always prefer queries that simulate how users interact with your UI, in the following order:
-
-1. Accessible Queries (most preferred)
-- getByRole: Use with the \`name\` option when applicable (e.g., \`getByRole('button', { name: /submit/i })\`).
-- getByLabelText: Ideal for form fields with visible labels.
-- getByPlaceholderText: Acceptable if no labels exist.
-- getByText: Useful for non-interactive content or static text.
-- getByDisplayValue: For inputs with pre-filled values.
-
-2. Semantic Queries
-- getByAltText: For images or custom elements with alt attributes.
-- getByTitle: Use sparingly; limited accessibility support.
-
-3. Test IDs (least preferred)
-- getByTestId: Only use when other options are not viable (e.g., content is dynamic or lacks semantic meaning).
-
-Always follow this order: Accessible Queries > Semantic Queries > Test IDs.
-
-Do not use CSS selectors, class names, or style-based queries. Avoid testing implementation details. Write tests that reflect how real users would interact with the component.
-`;
-
+    // Format the prompt using the template
+    const formattedPrompt = await executeRtlConversionTemplate.format({
+      testFile: file.content,
+      componentName: file.context.componentName,
+      componentSourceCode: file.context.componentCode,
+      componentFileImports: JSON.stringify(file.context.imports),
+      userInstructions: file.componentContext || 'No additional instructions provided.',
+      plan: '', // No plan for direct conversion
+      migrationGuidelines,
+    });
 
     console.log(`[convert-to-rtl] Calling OpenAI for conversion`);
 
     // Call OpenAI with the prompt
-    const response = await callOpenAIStructured(prompt);
+    const response = await callOpenAIStructured({
+      prompt: formattedPrompt,
+      schema: rtlConversionExecutorSchema
+    });
 
     // Log the full explanation
     console.log(`[convert-to-rtl] Conversion explanation: ${response.explanation}`);

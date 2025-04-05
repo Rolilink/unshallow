@@ -1,35 +1,11 @@
 import { WorkflowState, WorkflowStep, FixAttempt } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
 import { callOpenAIStructured, lintFixResponseSchema } from '../utils/openai.js';
+import { fixLintPrompt } from '../prompts/fix-lint-prompt.js';
+import { PromptTemplate } from "@langchain/core/prompts";
 
-/**
- * Formats fix history into a string for the prompt
- */
-function formatFixHistory(history: FixAttempt[]): string {
-  if (!history || history.length === 0) {
-    return "No previous fix attempts.";
-  }
-
-  return history.map((attempt) => {
-    return `
-### Fix Attempt ${attempt.attempt}
-**Timestamp:** ${attempt.timestamp}
-
-**Code:**
-\`\`\`tsx
-${attempt.testContent}
-\`\`\`
-
-**Resulting Error:**
-\`\`\`
-${attempt.error}
-\`\`\`
-
-**Explanation of Changes:**
-${attempt.explanation || "No explanation provided."}
-`;
-  }).join("\n");
-}
+// Create a PromptTemplate for the lint fix prompt
+export const fixLintPromptTemplate = PromptTemplate.fromTemplate(fixLintPrompt);
 
 /**
  * Fixes ESLint errors in the RTL test
@@ -37,109 +13,107 @@ ${attempt.explanation || "No explanation provided."}
 export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
 
-  console.log(`[fix-lint-error] Fixing lint (retry ${file.retries.lint + 1}/${file.maxRetries})`);
-
-  // Check if we've reached max retries
-  if (file.retries.lint >= file.maxRetries) {
-    console.log(`[fix-lint-error] Max retries reached (${file.maxRetries})`);
-    return {
-      file: {
-        ...file,
-        status: 'failed',
-        error: new Error(`Maximum retry limit reached (${file.maxRetries}) for lint fixes`),
-        currentStep: WorkflowStep.LINT_CHECK_FAILED,
-      },
-    };
-  }
+  console.log(`[fix-lint-error] Fixing ESLint error for ${file.path}`);
 
   try {
-    // Use the full output if available, otherwise fall back to joined errors
-    const lintErrors = file.lintCheck?.output || file.lintCheck?.errors?.join('\n') || 'Unknown lint errors';
+    if (!file.lintCheck) {
+      throw new Error('Lint check result is required but missing');
+    }
 
-    // Initialize Lint fix history if it doesn't exist
+    if (file.lintCheck.success) {
+      console.log(`[fix-lint-error] No lint errors detected, skipping fix`);
+      return {
+        file: {
+          ...file,
+          currentStep: WorkflowStep.LINT_CHECK_PASSED,
+        }
+      };
+    }
+
+    // Get the lint errors from the check result
+    const lintErrors = file.lintCheck.output || file.lintCheck.errors?.join('\n') || 'Unknown lint errors';
+    console.log(`[fix-lint-error] Lint errors detected: ${lintErrors}`);
+
+    // Initialize the fix history if not present
     const lintFixHistory = file.lintFixHistory || [];
 
     // If we have a current test and it's not the first attempt, add it to history
     if (file.rtlTest && file.retries.lint > 0) {
       // Add the current attempt to history
-      lintFixHistory.push({
+      const attempt: FixAttempt = {
         attempt: file.retries.lint,
         timestamp: new Date().toISOString(),
-        testContent: file.rtlTest,
+        testContentBefore: file.rtlTest || '',
+        testContentAfter: file.rtlTest || '',
         error: lintErrors,
         explanation: file.fixExplanation
-      });
+      };
+      lintFixHistory.push(attempt);
 
       console.log(`[fix-lint-error] Added attempt ${file.retries.lint} to Lint fix history (${lintFixHistory.length} total attempts)`);
     }
 
-    // Format fix history for the prompt
-    const fixHistoryText = formatFixHistory(lintFixHistory);
+    // Format previous fix attempts for the prompt
+    let fixHistory = '';
+    if (lintFixHistory.length > 0) {
+      const formatAttempt = (attempt: FixAttempt) =>
+        `Attempt ${attempt.attempt} at ${attempt.timestamp}:\n- Error: ${attempt.error}\n- Explanation: ${attempt.explanation || "No explanation provided"}`;
 
-    // Generate the prompt for fixing lint errors
-    const prompt = `
-Act as a senior React developer with strong knowledge of ESLint and TypeScript. You are reviewing a test file that contains remaining ESLint errors after an automatic fix attempt.
+      fixHistory = lintFixHistory.map(formatAttempt).join('\n\n');
+    }
 
-Your task is to manually fix the remaining ESLint errors **without changing the behavior or intent of the test**.
+    // Format the prompt using the template
+    const formattedPrompt = await fixLintPromptTemplate.format({
+      componentName: file.context.componentName,
+      testFile: file.rtlTest || '',
+      lintErrors,
+      fixHistory,
+      userInstructions: file.context.extraContext || ''
+    });
 
-## Current Test Code
-\`\`\`tsx
-${file.rtlTest}
-\`\`\`
+    console.log(`[fix-lint-error] Calling model to fix lint errors`);
 
-## ESLint Errors
-\`\`\`
-${lintErrors}
-\`\`\`
-
-## Previous Fix Attempts
-${fixHistoryText}
-
-## Instructions
-
-1. Fix the ESLint errors in the test file.
-2. Do not change the test behavior, logic, or structure in any way.
-3. Only make changes required to satisfy the ESLint rules.
-4. Do not remove or refactor any test logic beyond what is strictly required for lint compliance.
-5. Review previous fix attempts to avoid repeating failed changes.
-6. Your explanation should briefly describe what was fixed and why.
-7. For the testContent, return ONLY the fixed test code — no backticks, no comments, and no extra explanation.
-
-Important: Do not modify or assume changes to any external files. Fix only what's shown.
-`;
-
-    console.log(`[fix-lint-error] Calling OpenAI for fixes with ${lintFixHistory.length} previous attempts as context`);
-
-    // Call OpenAI with the prompt and Lint-specific schema
-    const response = await callOpenAIStructured(prompt, lintFixResponseSchema);
+    // Call OpenAI with the prompt and lint-specific schema
+    const response = await callOpenAIStructured({
+      prompt: formattedPrompt,
+      schema: lintFixResponseSchema
+    });
 
     // Log the full explanation
-    console.log(`[fix-lint-error] Fix explanation: ${response.explanation}`);
+    console.log(`[fix-lint-error] Explanation: ${response.explanation}`);
 
-    // Return the updated state with the fixed test
+    // Mark that we've attempted to fix lint errors
+    const updatedLintCheck = {
+      ...file.lintCheck,
+      lintFixAttempted: true
+    };
+
+    // Increment the lint retry counter
+    const updatedRetries = {
+      ...file.retries,
+      lint: file.retries.lint + 1
+    };
+
     return {
       file: {
         ...file,
         rtlTest: response.testContent.trim(),
         fixExplanation: response.explanation,
-        lintFixHistory: lintFixHistory, // Add Lint-specific fix history to state
-        retries: {
-          ...file.retries,
-          lint: file.retries.lint + 1,
-        },
+        lintCheck: updatedLintCheck,
+        retries: updatedRetries,
+        lintFixHistory,
         currentStep: WorkflowStep.LINT_CHECK,
-      },
+      }
     };
-  } catch (error) {
-    console.error(`[fix-lint-error] Error: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (err) {
+    console.error(`[fix-lint-error] Error: ${err instanceof Error ? err.message : String(err)}`);
 
     return {
       file: {
         ...file,
-        error: error instanceof Error ? error : new Error(String(error)),
-        status: 'failed',
+        error: err instanceof Error ? err : new Error(String(err)),
         currentStep: WorkflowStep.LINT_CHECK_ERROR,
-      },
+      }
     };
   }
 };

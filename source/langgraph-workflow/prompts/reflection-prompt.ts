@@ -60,7 +60,6 @@ Reflect on the errors in the test migration process, and provide insights and al
 					<after-each>Any missed cleanup concerns or redundant code? or answer with no changes needed</after-each>
 
 					<it-statement>
-						<original-it-statement-name>{originalIt}</original-it-statement-name>
 						<title>Did the title clearly state what the test verifies? or answer with no changes needed</title>
 						<description>Was the goal well defined? Suggest rewording if vague. or answer with no changes needed</description>
 						<each>Should this be a parameterized test or is \`it.each\` unnecessary? or answer with no changes needed</each>

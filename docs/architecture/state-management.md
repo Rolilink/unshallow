@@ -31,7 +31,7 @@ type MigrationState = {
 type FileState = {
 	path: string;
 	status: 'pending' | 'in-progress' | 'success' | 'failed';
-	step: 'migration' | 'ts' | 'lint' | 'complete';
+	step: 'migration' | 'fix' | 'ts' | 'lint' | 'complete';
 	retries: {
 		rtl: number;
 		lint: number;
@@ -56,13 +56,37 @@ type FileState = {
 	lintCheck?: {
 		passed: boolean;
 		message: string;
-		attempted: boolean;
+		lintFixAttempted: boolean;
 	};
 
 	tsCheck?: {
 		passed: boolean;
 		message: string;
 	};
+
+    // Reflection and learning
+    lastReflection?: string;
+    attemptSummary?: string;
+    fixPlan?: {
+        explanation: string;
+        plan: string;
+        timestamp: number;
+    };
+
+    // Fix histories
+    rtlFixHistory?: Array<{
+        attempt: number;
+        timestamp: number;
+        testContentBefore: string;
+        testContentAfter: string;
+        error: string;
+        explanation?: string;
+        plan?: {
+            explanation: string;
+            plan: string;
+        };
+        reflection?: string;
+    }>;
 };
 ```
 
@@ -288,7 +312,6 @@ const migrationReducer = (
 				...state,
 				status: 'failed',
 			};
-
 		default:
 			return state;
 	}

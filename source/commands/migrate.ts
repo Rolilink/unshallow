@@ -150,7 +150,7 @@ ${result.file.fixPlan.explanation}
 ${result.file.fixPlan.plan}
 
 ### Mocking Strategy
-${result.file.fixPlan.mockingNeeded ? result.file.fixPlan.mockStrategy : "No mocking was required."}
+"No mocking information available."
 `;
         }
 
@@ -163,7 +163,7 @@ ${result.file.rtlFixHistory.map((attempt) => `
 
 **Test Code:**
 \`\`\`tsx
-${attempt.testContent}
+${attempt.testContentBefore}
 \`\`\`
 
 **Error:**
@@ -186,7 +186,7 @@ ${result.file.tsFixHistory.map((attempt) => `
 
 **Test Code:**
 \`\`\`tsx
-${attempt.testContent}
+${attempt.testContentBefore}
 \`\`\`
 
 **Error:**
@@ -209,7 +209,7 @@ ${result.file.lintFixHistory.map((attempt) => `
 
 **Test Code:**
 \`\`\`tsx
-${attempt.testContent}
+${attempt.testContentBefore}
 \`\`\`
 
 **Error:**

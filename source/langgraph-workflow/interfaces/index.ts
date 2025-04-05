@@ -54,6 +54,7 @@ export enum WorkflowStep {
   RUN_TEST_SKIPPED = 'RUN_TEST_SKIPPED',
   RUN_TEST_ERROR = 'RUN_TEST_ERROR',
   RUN_TEST_FAILED = 'RUN_TEST_FAILED',
+  RUN_TEST_PASSED = 'RUN_TEST_PASSED',
   TS_VALIDATION = 'TS_VALIDATION',
   TS_VALIDATION_PASSED = 'TS_VALIDATION_PASSED',
   TS_VALIDATION_FAILED = 'TS_VALIDATION_FAILED',
@@ -63,7 +64,9 @@ export enum WorkflowStep {
   LINT_CHECK_PASSED = 'LINT_CHECK_PASSED',
   LINT_CHECK_FAILED = 'LINT_CHECK_FAILED',
   LINT_CHECK_SKIPPED = 'LINT_CHECK_SKIPPED',
-  LINT_CHECK_ERROR = 'LINT_CHECK_ERROR'
+  LINT_CHECK_ERROR = 'LINT_CHECK_ERROR',
+  REFLECTION = 'REFLECTION',
+  SUMMARIZE_ATTEMPTS = 'SUMMARIZE_ATTEMPTS'
 }
 
 /**
@@ -82,7 +85,7 @@ export interface TestResult {
  */
 export interface TsCheckResult {
   success: boolean;
-  errors?: string[];
+  errors: string[];
   output?: string;
 }
 
@@ -91,8 +94,9 @@ export interface TsCheckResult {
  */
 export interface LintCheckResult {
   success: boolean;
-  errors?: string[];
+  errors: string[];
   output?: string;
+  lintFixAttempted?: boolean;
 }
 
 /**
@@ -106,15 +110,12 @@ export type FileStatus = 'pending' | 'in-progress' | 'success' | 'failed';
 export interface FixAttempt {
   attempt: number;
   timestamp: string;
-  testContent: string;
+  testContentBefore: string;
+  testContentAfter: string;
   error: string;
   explanation?: string;
-  plan?: {
-    explanation: string;
-    plan: string;
-    mockingNeeded: boolean;
-    mockStrategy: string;
-  };
+  plan?: FixPlan;
+  reflection?: string;
 }
 
 /**
@@ -123,8 +124,6 @@ export interface FixAttempt {
 export interface FixPlan {
   explanation: string;
   plan: string;
-  mockingNeeded: boolean;
-  mockStrategy: string;
   timestamp: string;
 }
 
@@ -135,35 +134,22 @@ export interface FileState {
   path: string;
   content: string;
   tempPath?: string;
-  outputPath?: string;
+  originalTest: string;
+  rtlTest?: string;
   status: FileStatus;
   currentStep: WorkflowStep;
   error?: Error;
-
-  // Enriched context
   context: EnrichedContext;
-  componentContext?: string; // Formatted context for LLM prompt
-
-  // Migration outputs
-  originalTest: string;
-  rtlTest?: string;
-  fixExplanation?: string; // Explanation of fixes made by the LLM
-  currentFocus?: string; // Current test being focused on
-
-  // Fix plan for RTL tests
-  fixPlan?: FixPlan; // Plan for fixing RTL tests
-
-  // Fix history by type
-  rtlFixHistory?: FixAttempt[]; // History of RTL test fix attempts
-  tsFixHistory?: FixAttempt[]; // History of TypeScript fix attempts
-  lintFixHistory?: FixAttempt[]; // History of Lint fix attempts
-
-  // Validation results
+  componentContext?: string;
+  fixExplanation?: string;
+  currentFocus?: string;
+  fixPlan?: FixPlan;
+  rtlFixHistory?: FixAttempt[];
+  tsFixHistory?: FixAttempt[];
+  lintFixHistory?: FixAttempt[];
   testResult?: TestResult;
   tsCheck?: TsCheckResult;
   lintCheck?: LintCheckResult;
-
-  // Retry counters
   retries: {
     rtl: number;
     test: number;
@@ -171,19 +157,18 @@ export interface FileState {
     lint: number;
   };
   maxRetries: number;
-
-  // Custom validation commands
   commands: {
     lintCheck: string;
     lintFix: string;
     tsCheck: string;
     test: string;
   };
-
-  // Skip options
   skipTs: boolean;
   skipLint: boolean;
   skipTest: boolean;
+  step?: 'migration' | 'fix' | 'ts' | 'lint' | 'complete';
+  lastReflection?: string;
+  attemptSummary?: string;
 }
 
 /**
