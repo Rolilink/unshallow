@@ -3,6 +3,7 @@ import {Command} from 'commander';
 import {handleMigrateCommand} from './commands/migrate.js';
 import {handleContextEnricherCommand} from './commands/context-enricher.js';
 import {handleSetApiKeyCommand, handleGetApiKeyCommand} from './commands/config.js';
+import {handleTestLintCommand} from './commands/test-lint.js';
 
 // Create the main program
 const program = new Command()
@@ -107,6 +108,31 @@ program
 	)
 	.action(async (testFilePath, options) => {
 		const exitCode = await handleContextEnricherCommand(testFilePath, options);
+		process.exit(exitCode);
+	});
+
+// Add the test-lint command
+program
+	.command('test-lint')
+	.description('Test the lint check and fix cycle on a file')
+	.argument('<path>', 'File to test the lint cycle on')
+	.option('--max-retries <number>', 'Maximum LLM retries', '15')
+	.option(
+		'--lint-check-cmd <command>',
+		'Custom command for lint checking',
+		'yarn lint:check',
+	)
+	.option(
+		'--lint-fix-cmd <command>',
+		'Custom command for lint fixing',
+		'yarn lint:fix',
+	)
+	.option(
+		'--output-file <path>',
+		'Output file to write the fixed content to',
+	)
+	.action(async (inputPath, options) => {
+		const exitCode = await handleTestLintCommand(inputPath, options);
 		process.exit(exitCode);
 	});
 
