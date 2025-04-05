@@ -21,6 +21,7 @@ import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { langfuseCallbackHandler } from '../langsmith.js';
 import { reflectionNode } from './nodes/reflection.js';
 import { summarizeAttemptsNode } from './nodes/summarize-attempts.js';
+import { fileLoggingCallbackHandler } from './utils/logging-callback.js';
 
 
 type FileState = {
@@ -219,7 +220,7 @@ export function createWorkflow(
     try {
       // Execute the graph with the initial state and set recursion limit to 100
       const result = await enzymeToRtlConverterGraph.invoke(initialState, {
-        callbacks: [langfuseCallbackHandler],
+        callbacks: [langfuseCallbackHandler, fileLoggingCallbackHandler],
         recursionLimit: 100
       });
       return result;

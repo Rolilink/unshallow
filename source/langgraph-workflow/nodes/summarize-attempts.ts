@@ -56,7 +56,8 @@ export const summarizeAttemptsNode = async (state: WorkflowState): Promise<NodeR
       prompt: formattedPrompt,
       schema: summarizeAttemptsSchema,
       model: 'gpt-4o-mini',
-      temperature: 0.2
+      temperature: 0.2,
+      nodeName: 'summarize_attempts'
     });
 
     console.log(`[summarize-attempts] Summary: ${response.explanation}`);

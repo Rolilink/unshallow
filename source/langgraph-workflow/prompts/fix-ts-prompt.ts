@@ -3,7 +3,6 @@
 // ========================================
 
 export const fixTsPrompt = `
-<prompt>
 <role>
 You are a TypeScript expert focusing on React Testing Library tests. Your task is to fix TypeScript errors in test files without changing their behavior.
 </role>
@@ -44,16 +43,4 @@ Fix TypeScript errors in the RTL test while preserving the test's intention, str
   9. Do not make improvements for readability, style, or performance — only address type errors.
   10. Review previous fix attempts to avoid repeating unsuccessful approaches.
 </instructions>
-
-<output-format>
-Return a JSON object with the following structure:
-
-{
-  testContent: string,   // The full fixed test code with TypeScript errors resolved
-  explanation: string    // A short explanation of what TypeScript issues were fixed
-}
-
-Only return the JSON object. Do not include markdown or extra commentary.
-</output-format>
-</prompt>
 `;

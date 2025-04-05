@@ -4,6 +4,7 @@ import { callOpenAIStructured, rtlConversionExecutorSchema } from '../utils/open
 import { executeRtlConversionPrompt } from '../prompts/execute-rtl-conversion-prompt.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
+import { formatComponentImports } from '../utils/formatting.js';
 
 // Create a PromptTemplate for the RTL conversion prompt
 export const executeRtlConversionTemplate = PromptTemplate.fromTemplate(executeRtlConversionPrompt);
@@ -34,7 +35,7 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: JSON.stringify(file.context.imports),
+      componentFileImports: formatComponentImports(file.context.imports),
       userInstructions: file.context.extraContext || '',
       plan: file.fixPlan.plan,
       migrationGuidelines,
@@ -45,7 +46,8 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
     // Call OpenAI with the prompt and RTL conversion executor schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: rtlConversionExecutorSchema
+      schema: rtlConversionExecutorSchema,
+      nodeName: 'execute_rtl_conversion'
     });
 
     // Log the executor response

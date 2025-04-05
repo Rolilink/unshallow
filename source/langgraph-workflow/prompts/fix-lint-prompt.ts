@@ -3,7 +3,6 @@
 // ========================================
 
 export const fixLintPrompt = `
-<prompt>
 <role>
 You are an ESLint expert focusing on React Testing Library tests. Your task is to fix linting errors in test files without changing their behavior.
 </role>
@@ -38,16 +37,4 @@ Fix ESLint errors in the RTL test while preserving the test's intention, structu
   5. Review previous fix attempts to avoid repeating failed changes.
   6. Do not modify or assume changes to any external files.
 </instructions>
-
-<output-format>
-Return a JSON object with the following structure:
-
-{
-  testContent: string,   // The full fixed test code with lint errors resolved
-  explanation: string    // A short explanation of what was fixed and why
-}
-
-Only return the JSON object. Do not include markdown or extra commentary.
-</output-format>
-</prompt>
 `;

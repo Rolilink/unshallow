@@ -17,13 +17,13 @@ export const migrationGuidelines = `
 
 <examples>
 Correct usage:
-  screen.getByRole('button', { name: /submit/i })
+  screen.getByRole('button', {{ name: /submit/i }})
   userEvent.type(screen.getByLabelText('Email'), 'test@example.com')
   await screen.findByText('Success')
 
 Incorrect usage:
   screen.querySelector('button').click()
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'test@example.com' } })
+  fireEvent.change(screen.getByLabelText('Email'), {{ target: {{ value: 'test@example.com' }} }})
   expect(container.querySelector('input').value).toBe('hello')
 </examples>
 
@@ -52,16 +52,16 @@ Use \`waitFor()\` only when waiting for side effects that are not directly query
 
 <form-libraries>
 Mock the form hook:
-  jest.mock('react-hook-form', () => {
+  jest.mock('react-hook-form', () => {{
     const actual = jest.requireActual('react-hook-form');
-    return {
+    return {{
       ...actual,
-      useFormContext: jest.fn(() => ({
+      useFormContext: jest.fn(() => ({{
         watch: jest.fn(),
         getValues: jest.fn(),
-      })),
-    };
-  });
+      }})),
+    }};
+  }});
 </form-libraries>
 
 <routing-libraries>
@@ -73,21 +73,21 @@ Use both a memory router and hook mocks:
     </MemoryRouter>
   );
 
-  jest.mock('react-router-dom', () => {
+  jest.mock('react-router-dom', () => {{
     const actual = jest.requireActual('react-router-dom');
-    return {
+    return {{
       ...actual,
       useNavigate: jest.fn(() => jest.fn()),
-      useParams: jest.fn(() => ({ id: '123' })),
-    };
-  });
+      useParams: jest.fn(() => ({{ id: '123' }})),
+    }};
+  }});
 </routing-libraries>
 
 <styling-libraries>
 Always wrap with the actual theme provider when needed:
 
   render(
-    <ThemeProvider theme={mockTheme}>
+    <ThemeProvider theme={{mockTheme}}>
       <MyComponent />
     </ThemeProvider>
   );
@@ -95,36 +95,36 @@ Always wrap with the actual theme provider when needed:
 
 <data-fetching>
 Mock a custom hook:
-  jest.mock('../hooks/useUserQuery', () => ({
-    useUserQuery: jest.fn(() => ({
-      data: { name: 'Jane' },
+  jest.mock('../hooks/useUserQuery', () => ({{
+    useUserQuery: jest.fn(() => ({{
+      data: {{ name: 'Jane' }},
       isLoading: false,
-    })),
-  }));
+    }})),
+  }}));
 
 React Query:
-  jest.mock('@tanstack/react-query', () => {
+  jest.mock('@tanstack/react-query', () => {{
     const actual = jest.requireActual('@tanstack/react-query');
-    return {
+    return {{
       ...actual,
-      useQuery: jest.fn(() => ({
-        data: { user: {} },
+      useQuery: jest.fn(() => ({{
+        data: {{ user: {{}} }},
         isLoading: false,
-      })),
-    };
-  });
+      }})),
+    }};
+  }});
 
 Apollo:
-  jest.mock('@apollo/client', () => {
+  jest.mock('@apollo/client', () => {{
     const actual = jest.requireActual('@apollo/client');
-    return {
+    return {{
       ...actual,
-      useQuery: jest.fn(() => ({
-        data: { user: {} },
+      useQuery: jest.fn(() => ({{
+        data: {{ user: {{}} }},
         loading: false,
-      })),
-    };
-  });
+      }})),
+    }};
+  }});
 </data-fetching>
 
 <component-mocking>
@@ -135,15 +135,15 @@ Mocking components is acceptable when:
 
 Mock the component using a named stub for clarity:
 
-  jest.mock('../components/SettingsPage', () => ({
+  jest.mock('../components/SettingsPage', () => ({{
     __esModule: true,
     default: jest.fn(() => <div>SettingsPage</div>),
-  }));
+  }}));
 
-  jest.mock('../components/UserProfile', () => ({
+  jest.mock('../components/UserProfile', () => ({{
     __esModule: true,
     default: jest.fn(() => <div>UserProfile</div>),
-  }));
+  }}));
 
 This keeps test output clean, improves snapshot clarity, and avoids unnecessary complexity.
 </component-mocking>

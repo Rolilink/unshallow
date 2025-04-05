@@ -4,6 +4,8 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAIStructured } from '../utils/openai.js';
 import { reflectionPrompt } from '../prompts/reflection-prompt.js';
 import { PromptTemplate } from "@langchain/core/prompts";
+import { formatComponentImports, formatExamples } from '../utils/formatting.js';
+import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 
 // Create a schema that matches the <output-format> section in reflection-prompt.ts
 export const reflectionSchema = z.object({
@@ -40,13 +42,13 @@ export const reflectionNode = async (state: WorkflowState): Promise<NodeResult> 
       testFile: file.rtlTest || file.originalTest,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: JSON.stringify(file.context.imports),
-      supportingExamples: file.context.examples ? JSON.stringify(file.context.examples) : '',
+      componentFileImports: formatComponentImports(file.context.imports),
+      supportingExamples: formatExamples(file.context.examples),
       userInstructions: file.context.extraContext || '',
       explanation: lastAttempt?.explanation || '',
       lastAttemptError: lastAttempt?.error || '',
       attemptSummary: file.attemptSummary || '',
-      migrationGuidelines: '', // This will be populated by the user in the prompts folder
+      migrationGuidelines,
     });
 
     console.log(`[reflection] Calling OpenAI for reflection`);
@@ -55,7 +57,8 @@ export const reflectionNode = async (state: WorkflowState): Promise<NodeResult> 
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
       schema: reflectionSchema,
-      model: 'o3-mini'
+      model: 'gpt-4o-mini',
+      nodeName: 'reflection'
     });
 
     console.log(`[reflection] Reflection: ${response.explanation}`);

@@ -3,7 +3,6 @@
 // ========================================
 
 export const executeRtlFixPrompt = `
-<prompt>
 <role>
 You are a test fix executor. Your task is to apply a fix plan and generate an updated React Testing Library (RTL) test implementation.
 </role>
@@ -26,16 +25,4 @@ Generate a fixed test that follows best practices and incorporates corrections f
 	</user-instructions>
 	<plan>{plan}</plan>
 </context>
-
-<output-format>
-Return a JSON object with the following structure:
-
-{
-	code: string,         // The full test implementation
-	explanation: string   // A brief explanation of how this version resolves the problem
-}
-
-Only return the JSON object. Do not include markdown or extra commentary.
-</output-format>
-</prompt>
 `;

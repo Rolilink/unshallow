@@ -4,6 +4,7 @@ import { callOpenAIStructured, rtlConversionPlannerSchema } from '../utils/opena
 import { planRtlConversionPrompt } from '../prompts/plan-rtl-conversion-prompt.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
+import { formatComponentImports, formatExamples } from '../utils/formatting.js';
 
 // Create a PromptTemplate for the RTL conversion planner
 export const planRtlConversionTemplate = PromptTemplate.fromTemplate(planRtlConversionPrompt);
@@ -22,8 +23,8 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: JSON.stringify(file.context.imports),
-      supportingExamples: file.context.examples ? JSON.stringify(file.context.examples) : '',
+      componentFileImports: formatComponentImports(file.context.imports),
+      supportingExamples: formatExamples(file.context.examples),
       userInstructions: file.context.extraContext || '',
       migrationGuidelines,
     });
@@ -33,7 +34,8 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
     // Call OpenAI with the prompt and RTL conversion planner schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: rtlConversionPlannerSchema
+      schema: rtlConversionPlannerSchema,
+      nodeName: 'plan_rtl_conversion'
     });
 
     // Log the planner response

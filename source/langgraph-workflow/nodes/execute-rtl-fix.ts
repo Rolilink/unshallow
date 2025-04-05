@@ -4,6 +4,7 @@ import { callOpenAIStructured, rtlFixExecutorSchema } from '../utils/openai.js';
 import { executeRtlFixPrompt } from '../prompts/execute-rtl-fix-prompt.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
+import { formatComponentImports } from '../utils/formatting.js';
 
 // Create a PromptTemplate for the RTL fix prompt
 export const executeRtlFixTemplate = PromptTemplate.fromTemplate(executeRtlFixPrompt);
@@ -59,7 +60,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
     const formattedPrompt = await executeRtlFixTemplate.format({
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: JSON.stringify(file.context.imports),
+      componentFileImports: formatComponentImports(file.context.imports),
       testFile: file.rtlTest || '',
       plan: file.fixPlan.plan,
       error: testError,
@@ -72,7 +73,8 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
     // Call OpenAI with the prompt and RTL-specific executor schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: rtlFixExecutorSchema
+      schema: rtlFixExecutorSchema,
+      nodeName: 'execute_rtl_fix'
     });
 
     // Log the executor response

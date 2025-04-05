@@ -1,10 +1,8 @@
-
 // ========================================
 // 📄 summarizeAttemptPrompt
 // ========================================
 
 export const summarizeAttemptPrompt = `
-<prompt>
 <role>
 You are a summarization agent responsible for reviewing a test migration attempt and producing a concise summary of what happened and why it failed.
 </role>
@@ -84,13 +82,13 @@ Return only the XML snippet. Do not include markdown or extra commentary.
     User interactions were simulated using fireEvent, which led to inconsistent behavior.
   </error-to-fix>
   <fix-approach>
-    Switched to using \`userEvent.click(screen.getByRole('button'))\` for realistic interaction.
+    Switched to using \`userEvent.click(screen.getByRole('button', {{ name: 'Submit' }}))\` for realistic interaction.
   </fix-approach>
   <new-error>
     The form validation failed because required fields were not populated by the test.
   </new-error>
   <reflection-after-new-error>
-    The test should simulate user input via \`userEvent.type()\` before submitting the form.
+    The test should simulate user input via \`userEvent.type(screen.getByLabelText('Email'), 'test@example.com')\` before submitting the form.
   </reflection-after-new-error>
 </attempt-summary>
 </example>
@@ -103,7 +101,9 @@ Return only the XML snippet. Do not include markdown or extra commentary.
   <fix-approach>
     Mocked the entire child component to isolate the parent logic:
     \`\`\`ts
-    jest.mock('./Child', () => () => <div>Child</div>);
+    jest.mock('./Child', () => {{
+      return () => <div>Child</div>;
+    }});
     \`\`\`
   </fix-approach>
   <new-error>
@@ -115,5 +115,5 @@ Return only the XML snippet. Do not include markdown or extra commentary.
 </attempt-summary>
 </example>
 </examples>
-</prompt>`;
+`;
 

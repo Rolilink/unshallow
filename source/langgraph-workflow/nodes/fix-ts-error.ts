@@ -77,10 +77,11 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
 
     console.log(`[fix-ts-error] Calling model to fix TypeScript errors`);
 
-    // Call OpenAI with the prompt and TS-specific schema
+    // Call OpenAI with the prompt and TypeScript-specific schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: tsFixResponseSchema
+      schema: tsFixResponseSchema,
+      nodeName: 'fix_ts_error'
     });
 
     // Log the full explanation

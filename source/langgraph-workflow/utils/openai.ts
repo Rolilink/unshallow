@@ -41,9 +41,7 @@ export const rtlFixResponseSchema = z.object({
  */
 export const rtlFixPlannerSchema = z.object({
   explanation: z.string().describe("A concise explanation of why the tests are failing"),
-  plan: z.string().describe("A bullet-pointed string describing the fix steps"),
-  mockingNeeded: z.boolean().describe("Whether mocking is needed"),
-  mockStrategy: z.string().describe("Description of what should be mocked or how providers should be wrapped")
+  plan: z.string().describe("The instructions on how to fix the test for the LLM to refactor, be detailed and specific, and include code blocks to illustrate the changes needed")
 });
 
 /**
@@ -75,7 +73,7 @@ export const lintFixResponseSchema = z.object({
  */
 export const rtlConversionPlannerSchema = z.object({
   explanation: z.string().describe("A concise explanation of the Enzyme test's structure and what needs to be converted"),
-  plan: z.string().describe("The XML plan describing how to convert the test")
+  plan: z.string().describe("The instructions on how to convert the test for the LLM to refactor, be detailed and specific, and include code blocks to illustrate the changes needed")
 });
 
 /**
@@ -106,12 +104,14 @@ export async function callOpenAIStructured<T extends z.ZodType>({
   prompt,
   schema,
   model = 'gpt-4o-mini',
-  temperature
+  temperature,
+  nodeName
 }: {
   prompt: string;
   schema: T;
   model?: string;
   temperature?: number;
+  nodeName?: string;
 }): Promise<z.infer<T>> {
   try {
     // Create the parser
@@ -138,20 +138,37 @@ export async function callOpenAIStructured<T extends z.ZodType>({
     // Note: In the future, we might want to use the XML format in the prompts instead
     const fullPrompt = `${prompt}\n\n${formatInstructions}`;
 
+    // Add tags if nodeName is provided
+    const tags = nodeName ? [`node:${nodeName}`] : undefined;
+
     // Use the LLM directly with structured output
     const result = await llm.invoke([
       {
         type: "human",
         content: fullPrompt
       }
-    ]);
+    ], { tags });
 
     // Parse the response manually
     const content = result.content.toString();
     console.log('Received response, parsing structured output...');
 
+    // Strip markdown code blocks if present
+    let cleanContent = content;
+
+    // Check if the content starts with a code block marker
+    if (cleanContent.trim().startsWith('```')) {
+      // Remove the opening code block marker (```json or just ```)
+      cleanContent = cleanContent.replace(/^```(?:json|js|javascript|typescript|ts)?\s*/m, '');
+
+      // Remove the closing code block marker
+      cleanContent = cleanContent.replace(/```\s*$/m, '');
+
+      console.log('Stripped markdown code block from response');
+    }
+
     // Parse the response with the parser
-    const parsedOutput = await parser.parse(content);
+    const parsedOutput = await parser.parse(cleanContent);
     console.log('Structured response successfully parsed');
 
     return parsedOutput;
@@ -164,7 +181,7 @@ export async function callOpenAIStructured<T extends z.ZodType>({
 /**
  * Calls OpenAI with the given prompt and returns the completion as a raw string
  */
-export async function callOpenAI(prompt: string): Promise<string> {
+export async function callOpenAI(prompt: string, nodeName?: string): Promise<string> {
   try {
     // Configure the LLM
     const llm = new ChatOpenAI({
@@ -174,13 +191,16 @@ export async function callOpenAI(prompt: string): Promise<string> {
       callbacks: [langfuseCallbackHandler],
     });
 
+    // Add tags if nodeName is provided
+    const tags = nodeName ? [`node:${nodeName}`] : undefined;
+
     // Call the LLM directly
     const result = await llm.invoke([
       {
         type: "human",
         content: prompt
       }
-    ]);
+    ], { tags });
 
     console.log('Raw response received from OpenAI');
 

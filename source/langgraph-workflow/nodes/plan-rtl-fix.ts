@@ -4,6 +4,7 @@ import { callOpenAIStructured, rtlFixPlannerSchema } from '../utils/openai.js';
 import { planRtlFixPrompt } from '../prompts/plan-rtl-fix-prompt.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
+import { formatComponentImports, formatExamples } from '../utils/formatting.js';
 
 // Create a PromptTemplate for the RTL fix planner
 export const planRtlFixTemplate = PromptTemplate.fromTemplate(planRtlFixPrompt);
@@ -39,8 +40,8 @@ export const planRtlFixNode = async (state: WorkflowState): Promise<NodeResult> 
       testFile: file.originalTest,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: JSON.stringify(file.context.imports),
-      supportingExamples: file.context.examples ? JSON.stringify(file.context.examples) : '',
+      componentFileImports: formatComponentImports(file.context.imports),
+      supportingExamples: formatExamples(file.context.examples),
       userInstructions: file.context.extraContext || '',
       explanation: file.fixExplanation || '',
       previousCode: file.originalTest,
@@ -58,7 +59,8 @@ export const planRtlFixNode = async (state: WorkflowState): Promise<NodeResult> 
     // Call OpenAI with the prompt and RTL-specific planner schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: rtlFixPlannerSchema
+      schema: rtlFixPlannerSchema,
+      nodeName: 'plan_rtl_fix'
     });
 
     // Log the planner response

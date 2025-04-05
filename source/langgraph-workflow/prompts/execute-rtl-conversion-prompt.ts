@@ -3,7 +3,6 @@
 // ========================================
 
 export const executeRtlConversionPrompt = `
-<prompt>
 <role>
 You are a test migration executor. Your task is to take a detailed test migration plan and generate a React Testing Library (RTL) test implementation.
 </role>
@@ -29,16 +28,4 @@ Implement a working RTL test based on the provided migration plan. Follow best p
 
 	<plan>{plan}</plan>
 </context>
-
-<output-format>
-Return a JSON object with the following structure:
-
-{
-	code: string,         // The full test implementation
-	explanation: string   // A short explanation of how the test implements the plan
-}
-
-Only return the JSON object. Do not include markdown or extra commentary.
-</output-format>
-</prompt>
 `;

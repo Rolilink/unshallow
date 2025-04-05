@@ -76,7 +76,8 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     // Call OpenAI with the prompt and lint-specific schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: lintFixResponseSchema
+      schema: lintFixResponseSchema,
+      nodeName: 'fix_lint_error'
     });
 
     // Log the full explanation
