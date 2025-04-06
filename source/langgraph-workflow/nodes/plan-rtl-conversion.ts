@@ -1,69 +1,108 @@
-import { WorkflowState, WorkflowStep, FixPlan } from '../interfaces/index.js';
+import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
-import { callOpenAIStructured, rtlConversionPlannerSchema } from '../utils/openai.js';
-import { planRtlConversionPrompt } from '../prompts/plan-rtl-conversion-prompt.js';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { migrationGuidelines } from '../prompts/migration-guidelines.js';
-import { formatComponentImports, formatExamples } from '../utils/formatting.js';
+import { callOpenAIStructured } from '../utils/openai.js';
+import { planRtlConversionPrompt } from '../prompts/plan-rtl-conversion-prompt.js';
+import path from 'path';
+import { z } from 'zod';
 
-// Create a PromptTemplate for the RTL conversion planner
+// Define schema for plan RTL conversion output
+export const PlanRtlConversionOutputSchema = z.object({
+  plan: z.string().describe("A detailed plan for how to convert the test to RTL"),
+  explanation: z.string().describe("A concise explanation of the migration approach")
+});
+
+export type PlanRtlConversionOutput = z.infer<typeof PlanRtlConversionOutputSchema>;
+
+// Helper functions to format code with appropriate syntax highlighting
+function formatTestFile(content: string, filename: string): string {
+  const extension = path.extname(filename).slice(1);
+  return `\`\`\`${extension}\n// ${filename}\n${content}\n\`\`\``;
+}
+
+function formatComponentCode(content: string, componentName: string, componentPath: string): string {
+  const extension = path.extname(componentPath).slice(1);
+  return `\`\`\`${extension}\n// ${componentPath} (${componentName})\n${content}\n\`\`\``;
+}
+
+function formatImports(imports: Record<string, string> | undefined): string {
+  if (!imports || Object.keys(imports).length === 0) return '{}';
+
+  let result = '';
+  for (const [importPath, content] of Object.entries(imports)) {
+    const extension = path.extname(importPath).slice(1);
+    result += `\`\`\`${extension}\n// Imported by the component: ${importPath}\n${content}\n\`\`\`\n\n`;
+  }
+  return result;
+}
+
+// Create the PromptTemplate for the plan RTL conversion template
 export const planRtlConversionTemplate = PromptTemplate.fromTemplate(planRtlConversionPrompt);
 
 /**
- * Plans the conversion from Enzyme to RTL tests
+ * Plans the conversion from Enzyme to RTL
+ * Using a planner-executor pattern for better quality conversion
  */
 export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
 
-  console.log(`[plan-rtl-conversion] Planning conversion for ${file.path}`);
+  console.log(`[plan-rtl-conversion] Planning RTL conversion`);
 
   try {
-    // Format the prompt using the template
+    // Get file extension and component path for better formatting
+    const testFilePath = file.path;
+    const componentPath = file.context.componentName ?
+      `${file.context.componentName}${path.extname(testFilePath)}` :
+      'Component.tsx';
+
+    // Format the prompt using the template with properly formatted code blocks
     const formattedPrompt = await planRtlConversionTemplate.format({
-      testFile: file.content,
+      testFile: formatTestFile(file.content, path.basename(testFilePath)),
       componentName: file.context.componentName,
-      componentSourceCode: file.context.componentCode,
-      componentFileImports: formatComponentImports(file.context.imports),
-      supportingExamples: formatExamples(file.context.examples),
-      userInstructions: file.context.extraContext || '',
-      migrationGuidelines,
+      componentSourceCode: formatComponentCode(
+        file.context.componentCode,
+        file.context.componentName,
+        componentPath
+      ),
+      componentFileImports: formatImports(file.context.imports),
+      userProvidedContext: file.context.extraContext || '',
+      supportingExamples: ''
     });
 
-    console.log(`[plan-rtl-conversion] Calling OpenAI for conversion plan`);
+    console.log(`[plan-rtl-conversion] Calling OpenAI to plan conversion`);
 
-    // Call OpenAI with the prompt and RTL conversion planner schema
+    // Call OpenAI with the prompt and RTL planning schema
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
-      schema: rtlConversionPlannerSchema,
+      schema: PlanRtlConversionOutputSchema,
       nodeName: 'plan_rtl_conversion'
     });
 
     // Log the planner response
-    console.log(`[plan-rtl-conversion] Plan: ${response.explanation}`);
+    console.log(`[plan-rtl-conversion] Planned conversion with ${response.plan.split('\n').length} steps`);
 
-    // Create a conversion plan
-    const fixPlan: FixPlan = {
-      explanation: response.explanation,
-      plan: response.plan,
-      timestamp: new Date().toISOString()
-    };
-
+    // Return the updated state with the conversion plan
     return {
       file: {
         ...file,
-        fixPlan: fixPlan,
+        fixPlan: {
+          plan: response.plan,
+          explanation: response.explanation,
+          timestamp: new Date().toISOString()
+        },
         currentStep: WorkflowStep.PLAN_RTL_CONVERSION,
       },
     };
   } catch (error) {
     console.error(`[plan-rtl-conversion] Error: ${error instanceof Error ? error.message : String(error)}`);
 
+    // If there's an error, mark the process as failed
     return {
       file: {
         ...file,
         error: error instanceof Error ? error : new Error(String(error)),
         status: 'failed',
-        currentStep: WorkflowStep.CONVERT_TO_RTL_FAILED,
+        currentStep: WorkflowStep.PLAN_RTL_CONVERSION,
       },
     };
   }

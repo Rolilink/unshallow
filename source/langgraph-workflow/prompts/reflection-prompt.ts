@@ -23,10 +23,10 @@ Reflect on the errors in the test migration process, and provide insights and al
 		<supporting-examples>{supportingExamples}</supporting-examples>
 	</file-context>
 
-	<user-instructions>
+	<user-provided-context>
 		The following instructions will override previous guidelines and give extra context for this specific test:
-		{userInstructions}
-	</user-instructions>
+		{userProvidedContext}
+	</user-provided-context>
 
 	<explanation>{explanation}</explanation>
 	<last-attempt-error>{lastAttemptError}</last-attempt-error>

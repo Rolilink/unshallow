@@ -2,6 +2,8 @@
  * Interfaces for the LangGraph workflow
  */
 
+import { TrackedError } from './fix-loop-interfaces.js';
+
 /**
  * Configuration options for the workflow
  */
@@ -14,6 +16,7 @@ export interface WorkflowOptions {
   lintFixCmd?: string;
   tsCheckCmd?: string;
   testCmd?: string;
+  useFixLoop?: boolean;
 }
 
 /**
@@ -66,7 +69,12 @@ export enum WorkflowStep {
   LINT_CHECK_SKIPPED = 'LINT_CHECK_SKIPPED',
   LINT_CHECK_ERROR = 'LINT_CHECK_ERROR',
   REFLECTION = 'REFLECTION',
-  SUMMARIZE_ATTEMPTS = 'SUMMARIZE_ATTEMPTS'
+  SUMMARIZE_ATTEMPTS = 'SUMMARIZE_ATTEMPTS',
+  EXTRACT_ACCESSIBILITY_SNAPSHOT = 'EXTRACT_ACCESSIBILITY_SNAPSHOT',
+  EXTRACT_JEST_ERRORS = 'EXTRACT_JEST_ERRORS',
+  ANALYZE_TEST_ERRORS = 'ANALYZE_TEST_ERRORS',
+  ANALYZE_FAILURE = 'ANALYZE_FAILURE',
+  EXECUTE_RTL_FIX_NEW = 'EXECUTE_RTL_FIX_NEW'
 }
 
 /**
@@ -169,6 +177,13 @@ export interface FileState {
   step?: 'migration' | 'fix' | 'ts' | 'lint' | 'complete';
   lastReflection?: string;
   attemptSummary?: string;
+
+  // New properties for the fix loop
+  accessibilityDump?: string;
+  trackedErrors?: Record<string, TrackedError>;
+  currentError?: TrackedError | null;
+  totalAttempts?: number;
+  fixIntent?: string;
 }
 
 /**

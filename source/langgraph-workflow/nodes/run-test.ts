@@ -118,7 +118,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
 
     console.log(`[run-test] Test passed`);
 
-    // Test succeeded
+    // Test succeeded - setting RUN_TEST_PASSED to properly advance the workflow
     return {
       file: {
         ...updatedFile,
@@ -127,7 +127,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
           output: stripAnsiCodes(stdout), // Clean ANSI codes from successful output too
           exitCode: 0
         },
-        currentStep: WorkflowStep.RUN_TEST,
+        currentStep: WorkflowStep.RUN_TEST_PASSED,
       },
     };
   } catch (error) {

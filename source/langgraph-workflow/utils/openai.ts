@@ -125,6 +125,7 @@ export async function callOpenAIStructured<T extends z.ZodType>({
       modelName: model,
       openAIApiKey: getApiKey(),
       callbacks: [langfuseCallbackHandler],
+			response_format: { type: "json_object" },
     };
 
     // Only add temperature for models that support it
@@ -170,6 +171,13 @@ export async function callOpenAIStructured<T extends z.ZodType>({
     // Parse the response with the parser
     const parsedOutput = await parser.parse(cleanContent);
     console.log('Structured response successfully parsed');
+
+    // For planner responses, replace escaped newlines with actual newlines in the plan field
+    if ('plan' in parsedOutput) {
+      // Replace escaped newlines with actual newlines
+      parsedOutput.plan = parsedOutput.plan.replace(/\\n/g, '\n');
+      console.log('Plan with unescaped newlines:', parsedOutput.plan);
+    }
 
     return parsedOutput;
   } catch (error) {

@@ -4,6 +4,7 @@ import {handleMigrateCommand} from './commands/migrate.js';
 import {handleContextEnricherCommand} from './commands/context-enricher.js';
 import {handleSetApiKeyCommand, handleGetApiKeyCommand} from './commands/config.js';
 import {handleTestLintCommand} from './commands/test-lint.js';
+import {handleExportTracesCommand} from './commands/export-traces.js';
 
 // Create the main program
 const program = new Command()
@@ -133,6 +134,34 @@ program
 	)
 	.action(async (inputPath, options) => {
 		const exitCode = await handleTestLintCommand(inputPath, options);
+		process.exit(exitCode);
+	});
+
+// Add the export-traces command
+program
+	.command('export-traces')
+	.description('Export Langfuse traces to files in your home directory')
+	.option(
+		'--limit <number>',
+		'Maximum number of traces to export',
+		'100'
+	)
+	.option(
+		'--days <number>',
+		'Number of days back to fetch traces from',
+		'7'
+	)
+	.option(
+		'--filter <json>',
+		'JSON filter to apply when fetching traces'
+	)
+	.option(
+		'--format <format>',
+		'File format to save traces (json or ndjson)',
+		'json'
+	)
+	.action(async (options) => {
+		const exitCode = await handleExportTracesCommand(options);
 		process.exit(exitCode);
 	});
 
