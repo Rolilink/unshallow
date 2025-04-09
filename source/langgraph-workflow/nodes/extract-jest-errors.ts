@@ -3,7 +3,7 @@ import { NodeResult } from '../interfaces/node.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { extractJestErrorsPrompt } from '../prompts/extract-jest-errors-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
-import { ExtractJestErrorsOutputSchema, TrackedError } from '../interfaces/fix-loop-interfaces.js';
+import { ExtractJestErrorsOutputSchema, TrackedError } from '../interfaces/index.js';
 import crypto from 'crypto';
 
 // Create a hash for the error fingerprint

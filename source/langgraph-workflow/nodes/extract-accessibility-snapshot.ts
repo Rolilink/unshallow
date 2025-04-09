@@ -3,7 +3,7 @@ import { NodeResult } from '../interfaces/node.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { extractAccessibilitySnapshotPrompt } from '../prompts/extract-accessibility-snapshot-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
-import { ExtractAccessibilitySnapshotOutputSchema } from '../interfaces/fix-loop-interfaces.js';
+import { ExtractAccessibilitySnapshotOutputSchema } from '../interfaces/index.js';
 
 // Create the PromptTemplate for the extract-accessibility-snapshot prompt
 export const extractAccessibilitySnapshotTemplate = PromptTemplate.fromTemplate(extractAccessibilitySnapshotPrompt);
@@ -14,7 +14,7 @@ export const extractAccessibilitySnapshotTemplate = PromptTemplate.fromTemplate(
 export const extractAccessibilitySnapshotNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
 
-  console.log(`[extract-accessibility-snapshot] Extracting accessibility snapshot from test output`);
+  console.log(`[extract-accessibility-snapshot] Extracting accessibility information from test output`);
 
   try {
     // Check if there's a test result available
@@ -24,6 +24,7 @@ export const extractAccessibilitySnapshotNode = async (state: WorkflowState): Pr
         file: {
           ...file,
           accessibilityDump: '',
+          domTree: '',
         },
       };
     }
@@ -36,7 +37,7 @@ export const extractAccessibilitySnapshotNode = async (state: WorkflowState): Pr
       jestOutput,
     });
 
-    console.log(`[extract-accessibility-snapshot] Calling OpenAI to extract accessibility snapshot`);
+    console.log(`[extract-accessibility-snapshot] Calling OpenAI to extract accessibility information`);
 
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured({
@@ -45,23 +46,26 @@ export const extractAccessibilitySnapshotNode = async (state: WorkflowState): Pr
       nodeName: 'extract_accessibility_snapshot'
     });
 
-    console.log(`[extract-accessibility-snapshot] Extracted accessibility snapshot of length: ${response.accessibilityDump.length}`);
+    console.log(`[extract-accessibility-snapshot] Extracted accessibility roles of length: ${response.accessibilityDump.length}`);
+    console.log(`[extract-accessibility-snapshot] Extracted DOM tree of length: ${response.domTree.length}`);
 
-    // Return the updated state with the accessibility snapshot
+    // Return the updated state with the accessibility information
     return {
       file: {
         ...file,
         accessibilityDump: response.accessibilityDump,
+        domTree: response.domTree,
       },
     };
   } catch (error) {
     console.error(`[extract-accessibility-snapshot] Error: ${error instanceof Error ? error.message : String(error)}`);
 
-    // If there's an error, continue with the workflow but with an empty accessibility dump
+    // If there's an error, continue with the workflow but with empty accessibility information
     return {
       file: {
         ...file,
         accessibilityDump: '',
+        domTree: '',
       },
     };
   }

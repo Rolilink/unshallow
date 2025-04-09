@@ -77,13 +77,21 @@ Produce a clear analysis of the failure and provide a focused intent for fixing 
 
 </test-error>
 
-<accessibility-snapshot> <!-- DOM snapshot from RTL -->
+<accessibility-snapshot> <!-- Accessibility roles information -->
 
 \`\`\`
 {accessibilityDump}
 \`\`\`
 
 </accessibility-snapshot>
+
+<dom-tree> <!-- DOM structure from RTL -->
+
+\`\`\`
+{domTree}
+\`\`\`
+
+</dom-tree>
 
 <user-feedback> <!-- Additional context provided by user -->
 

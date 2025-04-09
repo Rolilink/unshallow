@@ -3,7 +3,7 @@ import { NodeResult } from '../interfaces/node.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { analyzeFailurePrompt } from '../prompts/analyze-failure-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
-import { AnalyzeFailureOutputSchema } from '../interfaces/fix-loop-interfaces.js';
+import { AnalyzeFailureOutputSchema } from '../interfaces/index.js';
 import path from 'path';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 
@@ -70,6 +70,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       componentFileImports: formatImports(file.context.imports),
       previousTestCode: file.rtlTest || '',
       accessibilityDump: file.accessibilityDump || '',
+      domTree: file.domTree || '',
       userFeedback: file.context.extraContext || '',
       testName: currentError.testName,
       normalizedError: currentError.normalized,

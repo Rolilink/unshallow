@@ -5,19 +5,21 @@
 export const extractAccessibilitySnapshotPrompt = `
 <task>
 
-Extract the accessibility and visual DOM snapshot from a failed Jest test run.
+Extract both the accessibility roles and DOM tree snapshot from a failed Jest test run with React Testing Library.
 
 </task>
 
 <persona>
 
-You are a test log processor specialized in identifying \`screen.debug()\` output from Jest logs.
+You are a test log processor specialized in identifying accessibility information and DOM structure from React Testing Library output.
 
 </persona>
 
 <format>
 
-Return only the accessibility-related DOM dump that RTL printed in the test error output.
+Return two separate sections:
+1. The accessibility roles information (including the "Here are the accessible roles:" section)
+2. The DOM tree (the HTML structure starting with <body>)
 
 </format>
 
@@ -35,29 +37,41 @@ Return only the accessibility-related DOM dump that RTL printed in the test erro
 
 <instructions>
 
-- Ignore the error message, stack trace, and any test output not related to accessibility.
-- Do not interpret or summarize the output — just extract it exactly.
+- Extract TWO pieces of information from the Jest output:
+  1. The accessibility roles section (everything between "Here are the accessible roles:" and the dashed separator)
+  2. The DOM tree (HTML structure starting with <body> tag)
+- Provide both pieces separately without interpretation or summarization.
+- If either piece is not found, return an empty string for that section.
+- Do not include error messages or stack traces in either section.
 
 </instructions>
 
 <output-example>
 
-<accessibility-dump>
+<accessibility-roles>
+
+\`\`\`
+Here are the accessible roles:
+
+  button:
+
+  Name "Open":
+  <button>Open</button>
+\`\`\`
+
+</accessibility-roles>
+
+<dom-tree>
 
 \`\`\`
 <body>
   <div>
-    <button type="button">Click me</button>
-    <div role="dialog">
-      <h2>Dialog Title</h2>
-      <p>Some content</p>
-      <button>Close</button>
-    </div>
+    <button>Open</button>
   </div>
 </body>
 \`\`\`
 
-</accessibility-dump>
+</dom-tree>
 
 </output-example>
 `;

@@ -87,13 +87,21 @@ Return the full updated test file and explain the changes you made.
 
 </test-error>
 
-<accessibility-snapshot> <!-- DOM snapshot from RTL -->
+<accessibility-snapshot> <!-- Accessibility roles information -->
 
 \`\`\`
 {accessibilityDump}
 \`\`\`
 
 </accessibility-snapshot>
+
+<dom-tree> <!-- DOM structure from RTL -->
+
+\`\`\`
+{domTree}
+\`\`\`
+
+</dom-tree>
 
 <last-attempt>
 

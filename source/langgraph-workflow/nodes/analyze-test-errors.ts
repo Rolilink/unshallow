@@ -1,6 +1,5 @@
-import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
+import { WorkflowState, WorkflowStep, TrackedError } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
-import { TrackedError } from '../interfaces/fix-loop-interfaces.js';
 
 /**
  * Analyzes errors and selects the next one to fix

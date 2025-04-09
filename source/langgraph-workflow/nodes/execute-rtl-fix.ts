@@ -3,7 +3,7 @@ import { NodeResult } from '../interfaces/node.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { executeRtlFixPrompt } from '../prompts/execute-rtl-fix-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
-import { ExecuteRtlFixOutputSchema } from '../interfaces/fix-loop-interfaces.js';
+import { ExecuteRtlFixOutputSchema } from '../interfaces/index.js';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 import path from 'path';
 import * as fs from 'fs/promises';
@@ -80,6 +80,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       normalizedError: currentError.normalized,
       rawError: currentError.message,
       accessibilityDump: file.accessibilityDump || '',
+      domTree: file.domTree || '',
       previousTestCode: file.rtlTest || '',
       previousExplanation: file.fixExplanation || '',
       migrationGuidelines: migrationGuidelines
