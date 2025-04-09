@@ -97,25 +97,25 @@ Return the complete test file with all TypeScript errors fixed while preserving 
 <fixed-test-file>
 
 \`\`\`tsx
-import { render, screen } from '@testing-library/react';
+import {{ render, screen }} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MyComponent, MyComponentProps } from './MyComponent';
+import {{ MyComponent, MyComponentProps }} from './MyComponent';
 
-describe('MyComponent', () => {
+describe('MyComponent', () => {{
   // Fixed by adding proper type annotation for props
-  const defaultProps: MyComponentProps = {
+  const defaultProps: MyComponentProps = {{
     title: 'Test',
     onClick: jest.fn(),
-  };
+  }};
 
-  it('should handle click events', async () => {
-    render(<MyComponent {...defaultProps} />);
+  it('should handle click events', async () => {{
+    render(<MyComponent {{...defaultProps}} />);
 
     await userEvent.click(screen.getByRole('button'));
 
     expect(defaultProps.onClick).toHaveBeenCalled();
-  });
-});
+  }});
+}});
 \`\`\`
 
 </fixed-test-file>

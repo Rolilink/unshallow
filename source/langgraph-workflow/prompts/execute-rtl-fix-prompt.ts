@@ -136,20 +136,20 @@ Return the full updated test file and explain the changes you made.
 <updated-test-file>
 
 \`\`\`tsx
-import { render, screen } from '@testing-library/react';
+import {{ render, screen }} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MyComponent from './MyComponent';
 
-describe('MyComponent', () => {
-  it('should display error message on invalid input', async () => {
+describe('MyComponent', () => {{
+  it('should display error message on invalid input', async () => {{
     render(<MyComponent />);
 
-    await userEvent.type(screen.getByRole('textbox', { name: /email/i }), 'invalid-email');
-    await userEvent.click(screen.getByRole('button', { name: /submit/i }));
+    await userEvent.type(screen.getByRole('textbox', {{ name: /email/i }}), 'invalid-email');
+    await userEvent.click(screen.getByRole('button', {{ name: /submit/i }}));
 
     expect(screen.getByText('Please enter a valid email')).toBeInTheDocument();
-  });
-});
+  }});
+}});
 \`\`\`
 
 </updated-test-file>

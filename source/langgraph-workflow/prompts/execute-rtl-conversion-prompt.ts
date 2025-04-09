@@ -83,24 +83,24 @@ Output the full RTL test code using TypeScript. Follow best practices including 
 <rtl-implementation>
 
 \`\`\`tsx
-import { render, screen } from '@testing-library/react';
+import {{ render, screen }} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MyComponent from './MyComponent';
 
-describe('MyComponent', () => {
-  it('should display welcome message when user logs in', async () => {
+describe('MyComponent', () => {{
+  it('should display welcome message when user logs in', async () => {{
     // Given the component is rendered
     render(<MyComponent />);
 
     // When the user enters credentials and clicks login
     await userEvent.type(screen.getByLabelText('Username'), 'testuser');
     await userEvent.type(screen.getByLabelText('Password'), 'password');
-    await userEvent.click(screen.getByRole('button', { name: 'Login' }));
+    await userEvent.click(screen.getByRole('button', {{ name: 'Login' }}));
 
     // Then the welcome message should be displayed
     expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
-  });
-});
+  }});
+}});
 \`\`\`
 
 </rtl-implementation>

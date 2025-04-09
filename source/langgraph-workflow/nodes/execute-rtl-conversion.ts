@@ -3,8 +3,8 @@ import { NodeResult } from '../interfaces/node.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { executeRtlConversionPrompt } from '../prompts/execute-rtl-conversion-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
-import path from 'path';
 import { z } from 'zod';
+import { formatImports } from '../utils/format-utils.js';
 
 // Define the schema using Zod
 export const ExecuteRtlConversionOutputSchema = z.object({
@@ -12,28 +12,6 @@ export const ExecuteRtlConversionOutputSchema = z.object({
 });
 
 export type ExecuteRtlConversionOutput = z.infer<typeof ExecuteRtlConversionOutputSchema>;
-
-// Helper functions to format code with appropriate syntax highlighting
-function formatTestFile(content: string, filename: string): string {
-  const extension = path.extname(filename).slice(1);
-  return `\`\`\`${extension}\n// ${filename}\n${content}\n\`\`\``;
-}
-
-function formatComponentCode(content: string, componentName: string, componentPath: string): string {
-  const extension = path.extname(componentPath).slice(1);
-  return `\`\`\`${extension}\n// ${componentPath} (${componentName})\n${content}\n\`\`\``;
-}
-
-function formatImports(imports: Record<string, string> | undefined): string {
-  if (!imports || Object.keys(imports).length === 0) return '{}';
-
-  let result = '';
-  for (const [importPath, content] of Object.entries(imports)) {
-    const extension = path.extname(importPath).slice(1);
-    result += `\`\`\`${extension}\n// Imported by the component: ${importPath}\n${content}\n\`\`\`\n\n`;
-  }
-  return result;
-}
 
 // Create the PromptTemplate for the convert RTL template
 export const executeRtlConversionTemplate = PromptTemplate.fromTemplate(executeRtlConversionPrompt);
@@ -61,23 +39,11 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       };
     }
 
-    // Extract the test file path
-    const testFilePath = file.path;
-
-    // Get component path for better formatting
-    const componentPath = file.context.componentName ?
-      `${file.context.componentName}${path.extname(testFilePath)}` :
-      'Component.tsx';
-
     // Format the prompt using the template
     const formattedPrompt = await executeRtlConversionTemplate.format({
-      testFile: formatTestFile(file.content, path.basename(testFilePath)),
+      testFile: file.content,
       componentName: file.context.componentName,
-      componentSourceCode: formatComponentCode(
-        file.context.componentCode,
-        file.context.componentName,
-        componentPath
-      ),
+      componentSourceCode: file.context.componentCode,
       componentFileImports: formatImports(file.context.imports),
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: file.fixPlan.plan,

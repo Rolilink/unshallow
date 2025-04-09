@@ -3,8 +3,8 @@ import { NodeResult } from '../interfaces/node.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { callOpenAIStructured } from '../utils/openai.js';
 import { planRtlConversionPrompt } from '../prompts/plan-rtl-conversion-prompt.js';
-import path from 'path';
 import { z } from 'zod';
+import { formatImports } from '../utils/format-utils.js';
 
 // Define schema for plan RTL conversion output
 export const PlanRtlConversionOutputSchema = z.object({
@@ -13,18 +13,6 @@ export const PlanRtlConversionOutputSchema = z.object({
 });
 
 export type PlanRtlConversionOutput = z.infer<typeof PlanRtlConversionOutputSchema>;
-
-
-function formatImports(imports: Record<string, string> | undefined): string {
-  if (!imports || Object.keys(imports).length === 0) return '{}';
-
-  let result = '';
-  for (const [importPath, content] of Object.entries(imports)) {
-    const extension = path.extname(importPath).slice(1);
-    result += `\`\`\`${extension}\n// Path: ${importPath} (imported by the component)\n${content}\n\`\`\`\n\n`;
-  }
-  return result;
-}
 
 // Create the PromptTemplate for the plan RTL conversion template
 export const planRtlConversionTemplate = PromptTemplate.fromTemplate(planRtlConversionPrompt);

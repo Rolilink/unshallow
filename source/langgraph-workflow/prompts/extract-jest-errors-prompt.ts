@@ -45,16 +45,16 @@ For each failed test, provide the test name, raw error message, and a normalized
 
 <errors>
 [
-  {
+  {{
     "testName": "Button should call onClick when clicked",
     "message": "Error: expect(jest.fn()).toHaveBeenCalled()\nExpected number of calls: >= 1\nReceived number of calls: 0",
     "normalized": "Error: expect function to have been called but it was not called"
-  },
-  {
+  }},
+  {{
     "testName": "Dropdown should display options when expanded",
     "message": "Error: Unable to find an element with the text: /Option 1/i.",
     "normalized": "Error: Unable to find an element with the text matching a specific pattern"
-  }
+  }}
 ]
 </errors>
 

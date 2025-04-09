@@ -120,7 +120,7 @@ Produce a clear analysis of the failure and provide a focused intent for fixing 
 <output-example>
 
 <fix-intent>
-The test is failing because it's trying to use getByText() to find an element that doesn't exist in the rendered output. We should switch to using getByRole('button', { name: /submit/i }) to properly target the button element.
+The test is failing because it's trying to use getByText() to find an element that doesn't exist in the rendered output. We should switch to using getByRole('button', {{ name: /submit/i }}) to properly target the button element.
 </fix-intent>
 
 <explanation>

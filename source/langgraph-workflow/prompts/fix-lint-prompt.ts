@@ -79,12 +79,12 @@ Return the complete test file with all lint errors fixed while preserving the te
 <fixed-test-file>
 
 \`\`\`tsx
-import { render, screen } from '@testing-library/react';
+import {{ render, screen }} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MyComponent from './MyComponent';
 
-describe('MyComponent', () => {
-  it('should respond to user interaction', async () => {
+describe('MyComponent', () => {{
+  it('should respond to user interaction', async () => {{
     // Render component
     render(<MyComponent />);
 
@@ -95,8 +95,8 @@ describe('MyComponent', () => {
     await userEvent.click(screen.getByRole('button'));
 
     expect(screen.getByText('Clicked')).toBeInTheDocument();
-  });
-});
+  }});
+}});
 \`\`\`
 
 </fixed-test-file>
