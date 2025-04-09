@@ -14,16 +14,6 @@ export const PlanRtlConversionOutputSchema = z.object({
 
 export type PlanRtlConversionOutput = z.infer<typeof PlanRtlConversionOutputSchema>;
 
-// Helper functions to format code with appropriate syntax highlighting
-function formatTestFile(content: string, filename: string): string {
-  const extension = path.extname(filename).slice(1);
-  return `\`\`\`${extension}\n// ${filename}\n${content}\n\`\`\``;
-}
-
-function formatComponentCode(content: string, componentName: string, componentPath: string): string {
-  const extension = path.extname(componentPath).slice(1);
-  return `\`\`\`${extension}\n// ${componentPath} (${componentName})\n${content}\n\`\`\``;
-}
 
 function formatImports(imports: Record<string, string> | undefined): string {
   if (!imports || Object.keys(imports).length === 0) return '{}';
@@ -31,7 +21,7 @@ function formatImports(imports: Record<string, string> | undefined): string {
   let result = '';
   for (const [importPath, content] of Object.entries(imports)) {
     const extension = path.extname(importPath).slice(1);
-    result += `\`\`\`${extension}\n// Imported by the component: ${importPath}\n${content}\n\`\`\`\n\n`;
+    result += `\`\`\`${extension}\n// Path: ${importPath} (imported by the component)\n${content}\n\`\`\`\n\n`;
   }
   return result;
 }
@@ -49,21 +39,11 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
   console.log(`[plan-rtl-conversion] Planning RTL conversion`);
 
   try {
-    // Get file extension and component path for better formatting
-    const testFilePath = file.path;
-    const componentPath = file.context.componentName ?
-      `${file.context.componentName}${path.extname(testFilePath)}` :
-      'Component.tsx';
-
-    // Format the prompt using the template with properly formatted code blocks
+    // Format the prompt using the template without code block formatting
     const formattedPrompt = await planRtlConversionTemplate.format({
-      testFile: formatTestFile(file.content, path.basename(testFilePath)),
+      testFile: file.content, // Use content directly
       componentName: file.context.componentName,
-      componentSourceCode: formatComponentCode(
-        file.context.componentCode,
-        file.context.componentName,
-        componentPath
-      ),
+      componentSourceCode: file.context.componentCode, // Use component code directly
       componentFileImports: formatImports(file.context.imports),
       userProvidedContext: file.context.extraContext || '',
       supportingExamples: ''

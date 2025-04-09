@@ -96,6 +96,16 @@ graph.addNode("load_test_file", loadTestFileNode)
 	.addConditionalEdges(
 		"analyze_test_errors",
 		(state) => {
+			const totalAttempts = state.file.totalAttempts || 0;
+			const trackedErrors = state.file.trackedErrors || {};
+			const hasExceededErrorAttempts = Object.values(trackedErrors).every(error => error && error.currentAttempts >= 5);
+			const hasHitTotalAttempts = totalAttempts >= 10;
+
+			if (hasHitTotalAttempts || hasExceededErrorAttempts) {
+				console.log(`[workflow] Ending due to exceeded attempts`);
+				return "end";
+			}
+
 			if (state.file.currentError) {
 				return "analyze_failure";
 			} else {
@@ -104,7 +114,8 @@ graph.addNode("load_test_file", loadTestFileNode)
 		},
 		{
 			analyze_failure: "analyze_failure",
-			validate_typescript: "ts_validation"
+			validate_typescript: "ts_validation",
+			end: END
 		}
 	)
 	.addEdge("analyze_failure", "execute_rtl_fix")

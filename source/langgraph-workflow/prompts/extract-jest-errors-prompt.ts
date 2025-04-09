@@ -12,7 +12,9 @@ You are a test runner output parser. Your job is to extract test failures and cl
 </persona>
 
 <context>
-  <jest-output>{jestOutput}</jest-output>
+  <jest-output>
+	{jestOutput}
+	</jest-output>
 </context>
 
 <instructions>

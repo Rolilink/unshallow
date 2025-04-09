@@ -12,7 +12,7 @@ export const migrationGuidelines = `
 	- ByLabelText
 	- ByPlaceholderText
 	- ByText
-	- ByTestId
+- Do NOT use ByTestId.
 - use findBy queries instead of waitFor.
 - use queryBy queries to check for the absence of elements.
 - never test css classes or css styles, test via accessibility attributes.

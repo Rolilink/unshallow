@@ -13,15 +13,23 @@ Fix ESLint errors in the RTL test while preserving the test's intention, structu
 
 <context>
   <file-context>
-    <component-name>{componentName}</component-name>
-    <test-file>{testFile}</test-file>
+    <component-name>
+		{componentName}
+		</component-name>
+    <test-file>
+		{testFile}
+		</test-file>
   </file-context>
 
   <error>
-    <lint-errors>{lintErrors}</lint-errors>
+    <lint-errors>
+		{lintErrors}
+		</lint-errors>
   </error>
 
-  <fix-history>{fixHistory}</fix-history>
+  <fix-history>
+	{fixHistory}
+	</fix-history>
 
   <user-instructions>
     The following instructions will override previous guidelines and give extra context for this specific test:

@@ -22,10 +22,18 @@ Output the full RTL test code using TypeScript. Follow best practices including 
 
 <context>
 <file-context>
-  <test-file>{testFile}</test-file> <!-- The original Enzyme test file being migrated -->
-  <component-name>{componentName}</component-name> <!-- Name of the React component under test -->
-  <component-source-code>{componentSourceCode}</component-source-code> <!-- Source code of the component under test -->
-  <component-file-imports>{componentFileImports}</component-file-imports> <!-- Relevant local imports used by the component -->
+  <test-file> <!-- The original Enzyme test file being migrated -->
+	{testFile}
+	</test-file>
+  <component-name>  <!-- Name of the React component under test -->
+	{componentName}
+	</component-name>
+  <component-source-code> <!-- Source code of the component under test -->
+	{componentSourceCode}
+	</component-source-code>
+  <component-file-imports> <!-- Relevant local imports used by the component -->
+	{componentFileImports}
+	</component-file-imports>
 </file-context>
 
 <user-provided-context>

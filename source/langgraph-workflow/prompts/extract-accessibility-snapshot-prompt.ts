@@ -16,7 +16,9 @@ Return only the accessibility-related DOM dump that RTL printed in the test erro
 </format>
 
 <context>
-  <jest-output>{jestOutput}</jest-output>
+  <jest-output>
+	{jestOutput}
+	</jest-output>
 </context>
 
 <instructions>

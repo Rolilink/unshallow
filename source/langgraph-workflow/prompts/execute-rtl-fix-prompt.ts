@@ -17,18 +17,34 @@ Return the full updated test file and explain the changes you made.
 
 <context>
   <file-context>
-    <test-file>{testFile}</test-file>
-    <component-name>{componentName}</component-name>
-    <component-source-code>{componentSourceCode}</component-source-code>
-    <component-file-imports>{componentFileImports}</component-file-imports>
+    <test-file>
+		{testFile}
+		</test-file>
+    <component-name>
+		{componentName}
+		</component-name>
+    <component-source-code>
+		{componentSourceCode}
+		</component-source-code>
+    <component-file-imports>
+		{componentFileImports}
+		</component-file-imports>
   </file-context>
 
-  <user-feedback>{userFeedback}</user-feedback>
+  <user-feedback>
+	{userFeedback}
+	</user-feedback>
 
   <test-error>
-    <test-name>{testName}</test-name>
-    <normalized>{normalizedError}</normalized>
-    <raw-message>{rawError}</raw-message>
+    <test-name>
+		{testName}
+		</test-name>
+    <normalized>
+		{normalizedError}
+		</normalized>
+    <raw-message>
+		{rawError}
+		</raw-message>
   </test-error>
 
   <accessibility-snapshot>
@@ -36,8 +52,12 @@ Return the full updated test file and explain the changes you made.
   </accessibility-snapshot>
 
   <last-attempt>
-    <previous-code>{previousTestCode}</previous-code>
-    <explanation>{previousExplanation}</explanation>
+    <previous-code>
+		{previousTestCode}
+		</previous-code>
+    <explanation>
+		{previousExplanation}
+		</explanation>
   </last-attempt>
 </context>
 

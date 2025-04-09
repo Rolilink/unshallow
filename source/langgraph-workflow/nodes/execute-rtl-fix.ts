@@ -4,6 +4,7 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { executeRtlFixPrompt } from '../prompts/execute-rtl-fix-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
 import { ExecuteRtlFixOutputSchema } from '../interfaces/fix-loop-interfaces.js';
+import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 import path from 'path';
 import * as fs from 'fs/promises';
 
@@ -81,7 +82,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       accessibilityDump: file.accessibilityDump || '',
       previousTestCode: file.rtlTest || '',
       previousExplanation: file.fixExplanation || '',
-      migrationGuidelines: ''
+      migrationGuidelines: migrationGuidelines
     });
 
     console.log(`[execute-rtl-fix] Calling OpenAI to execute fix`);

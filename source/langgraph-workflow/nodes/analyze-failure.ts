@@ -5,6 +5,7 @@ import { analyzeFailurePrompt } from '../prompts/analyze-failure-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
 import { AnalyzeFailureOutputSchema } from '../interfaces/fix-loop-interfaces.js';
 import path from 'path';
+import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 
 // Helper functions to format code with appropriate syntax highlighting
 function formatTestFile(content: string, filename: string): string {
@@ -73,8 +74,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       testName: currentError.testName,
       normalizedError: currentError.normalized,
       rawError: currentError.message,
-      // Add any missing required parameters for the template
-      migrationGuidelines: ''
+      migrationGuidelines: migrationGuidelines
     });
 
     console.log(`[analyze-failure] Calling OpenAI to analyze test failure`);

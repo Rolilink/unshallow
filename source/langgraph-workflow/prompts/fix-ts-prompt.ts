@@ -13,17 +13,29 @@ Fix TypeScript errors in the RTL test while preserving the test's intention, str
 
 <context>
   <file-context>
-    <component-name>{componentName}</component-name>
-    <component-source-code>{componentSourceCode}</component-source-code>
-    <component-file-imports>{componentFileImports}</component-file-imports>
-    <test-file>{testFile}</test-file>
+    <component-name>
+		{componentName}
+		</component-name>
+    <component-source-code>
+		{componentSourceCode}
+		</component-source-code>
+    <component-file-imports>
+		{componentFileImports}
+		</component-file-imports>
+    <test-file>
+		{testFile}
+		</test-file>
   </file-context>
 
   <error>
-    <typescript-errors>{tsErrors}</typescript-errors>
+    <typescript-errors>
+		{tsErrors}
+		</typescript-errors>
   </error>
 
-  <fix-history>{fixHistory}</fix-history>
+  <fix-history>
+	{fixHistory}
+	</fix-history>
 
   <user-instructions>
     The following instructions will override previous guidelines and give extra context for this specific test:

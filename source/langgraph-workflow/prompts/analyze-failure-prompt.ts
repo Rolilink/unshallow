@@ -12,20 +12,40 @@ You are a senior test engineer and debugging expert specializing in React Testin
 </persona>
 
 <context>
-  <test-file>{testFile}</test-file>
-  <component-name>{componentName}</component-name>
-  <component-source-code>{componentSourceCode}</component-source-code>
-  <component-file-imports>{componentFileImports}</component-file-imports>
+  <test-file>
+	{testFile}
+	</test-file>
+  <component-name>
+	{componentName}
+	</component-name>
+  <component-source-code>
+	{componentSourceCode}
+	</component-source-code>
+  <component-file-imports>
+	{componentFileImports}
+	</component-file-imports>
 
   <test-error>
-    <test-name>{testName}</test-name>
-    <normalized>{normalizedError}</normalized>
-    <raw-message>{rawError}</raw-message>
+    <test-name>
+		{testName}
+		</test-name>
+    <normalized>
+		{normalizedError}
+		</normalized>
+    <raw-message>
+		{rawError}
+		</raw-message>
   </test-error>
 
-  <accessibility-snapshot>{accessibilityDump}</accessibility-snapshot>
-  <user-feedback>{userFeedback}</user-feedback>
-  <previous-code>{previousTestCode}</previous-code>
+  <accessibility-snapshot>
+	{accessibilityDump}
+	</accessibility-snapshot>
+  <user-feedback>
+	{userFeedback}
+	</user-feedback>
+  <previous-code>
+	{previousTestCode}
+	</previous-code>
 </context>
 
 <instructions>
