@@ -51,6 +51,7 @@ export async function handleContextEnricherCommand(
         // Convert Maps to objects for JSON serialization
         const jsonOutput = {
           testedComponent: enrichedContext.testedComponent,
+          componentImports: Object.fromEntries(enrichedContext.componentImports),
           relatedFiles: Object.fromEntries(enrichedContext.relatedFiles),
           exampleTests: enrichedContext.exampleTests
             ? Object.fromEntries(enrichedContext.exampleTests)
@@ -72,7 +73,16 @@ export async function handleContextEnricherCommand(
         console.log(enrichedContext.testedComponent.content);
         console.log('------------------------\n');
 
-        console.log('\nRelated Files:');
+        console.log('\nComponent Imports:');
+        enrichedContext.componentImports.forEach((content, filePath) => {
+          console.log(`- ${filePath}`);
+          console.log('\nFile Content:');
+          console.log('------------------------');
+          console.log(content);
+          console.log('------------------------\n');
+        });
+
+        console.log('\nOther Related Files:');
         enrichedContext.relatedFiles.forEach((content, filePath) => {
           console.log(`- ${filePath}`);
           console.log('\nFile Content:');

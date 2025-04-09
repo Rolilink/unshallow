@@ -33,7 +33,10 @@ export interface EnrichedContext {
   /** The identified component under test */
   testedComponent: TestedComponent;
 
-  /** Map of related files (imports) with relative paths as keys */
+  /** Map of direct component imports with relative paths as keys */
+  componentImports: Map<string, string>; // path -> content
+
+  /** Map of other related files with relative paths as keys */
   relatedFiles: Map<string, string>; // path -> content
 
   /** Optional example tests */

@@ -33,7 +33,8 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.imports),
+      // Filter out the component's own file from imports
+      componentFileImports: formatImports(file.context.componentImports || {}),
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: '', // No plan for direct conversion
       migrationGuidelines: '',
@@ -88,7 +89,8 @@ export const convertToRtlNode = async (state: WorkflowState): Promise<NodeResult
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.imports),
+      // Filter out the component's own file from imports
+      componentFileImports: formatImports(file.context.componentImports || {}),
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: '', // No plan for direct conversion
       migrationGuidelines: '',

@@ -43,7 +43,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       testFile: file.rtlTest || '',
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.imports),
+      componentFileImports: formatImports(file.context.componentImports || {}),
       userFeedback: file.context.extraContext || '',
       testName: currentError.testName,
       normalizedError: currentError.normalized,

@@ -55,9 +55,40 @@ export class ContextEnricher {
 
       const componentContent = await fs.readFile(componentFilePath, 'utf8');
 
-      // Build map of related files (component imports)
+      // Get the component's direct imports
+      const componentImports = new Map<string, string>();
+
+      // Extract direct imports from the component file
+      const componentDirectImports = await this.extractDirectImports(componentFilePath);
+
+      // Process direct imports
+      for (const importPath of componentDirectImports) {
+        try {
+          const resolvedPath = resolveImportPath(
+            importPath,
+            path.dirname(componentFilePath),
+            this.projectRoot
+          );
+
+          const relativePath = path.relative(this.projectRoot, resolvedPath);
+          const content = await fs.readFile(resolvedPath, 'utf8');
+          componentImports.set(relativePath, content);
+        } catch (error) {
+          console.warn(
+            `Error processing direct import ${importPath} from ${componentFilePath}:`,
+            error,
+          );
+        }
+      }
+
+      // Build map of related files (deeper imports)
       const relatedFiles = new Map<string, string>();
-      await this.processImports(componentFilePath, relatedFiles, 0, importDepth);
+
+      // Process deeper imports starting from the component's direct imports
+      for (const [importPath] of componentImports) {
+        const absolutePath = path.resolve(this.projectRoot, importPath);
+        await this.processImports(absolutePath, relatedFiles, 1, importDepth);
+      }
 
       // Create the base context
       const context: EnrichedContext = {
@@ -66,6 +97,7 @@ export class ContextEnricher {
           filePath: path.relative(this.projectRoot, componentFilePath),
           content: componentContent,
         },
+        componentImports,
         relatedFiles,
       };
 
@@ -118,12 +150,52 @@ export class ContextEnricher {
   }
 
   /**
+   * Extract direct imports from a file
+   * @param filePath Path to the file to analyze
+   * @returns Array of import paths
+   */
+  private async extractDirectImports(filePath: string): Promise<string[]> {
+    try {
+      const content = await fs.readFile(filePath, 'utf8');
+      const sourceFile = ts.createSourceFile(
+        filePath,
+        content,
+        ts.ScriptTarget.Latest,
+        true,
+      );
+
+      // Extract imports
+      const imports: string[] = [];
+      ts.forEachChild(sourceFile, node => {
+        if (ts.isImportDeclaration(node)) {
+          const importPath = (node.moduleSpecifier as ts.StringLiteral).text;
+
+          // Skip node_modules and non-relative imports
+          if (importPath.startsWith('.')) {
+            imports.push(importPath);
+          }
+        }
+      });
+
+      return imports;
+    } catch (error) {
+      console.error(`Error extracting imports from ${filePath}:`, error);
+      return [];
+    }
+  }
+
+  /**
    * Get a map of all related file contents from the enriched context
    * @param context The enriched context object
    * @returns A map of file paths to their contents
    */
   getRelatedFilesContent(context: EnrichedContext): Map<string, string> {
-    return context.relatedFiles;
+    // Combine component imports and related files
+    const combinedMap = new Map<string, string>([
+      ...context.componentImports,
+      ...context.relatedFiles
+    ]);
+    return combinedMap;
   }
 
   /**

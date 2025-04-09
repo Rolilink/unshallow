@@ -46,6 +46,7 @@ export interface Component {
 export interface EnrichedContext {
   componentName: string;
   componentCode: string;
+  componentImports: Record<string, string>;
   imports: Record<string, string>;
   examples?: Record<string, string>;
   extraContext?: string;

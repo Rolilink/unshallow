@@ -173,7 +173,14 @@ export function createWorkflow(
 			content: '',
 			status: 'pending',
 			currentStep: WorkflowStep.INITIALIZE,
-			context, // Context from ContextEnricher
+			context: {
+				componentName: context.componentName,
+				componentCode: context.componentCode,
+				componentImports: context.componentImports || {},
+				imports: context.imports || {},
+				examples: context.examples,
+				extraContext: context.extraContext,
+			}, // Context from ContextEnricher
 			retries: {
 				rtl: 0,
 				test: 0,

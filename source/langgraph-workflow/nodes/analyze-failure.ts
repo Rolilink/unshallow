@@ -35,7 +35,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       testFile: file.rtlTest || '',
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.imports),
+      componentFileImports: formatImports(file.context.componentImports || {}),
       previousTestCode: file.rtlTest || '',
       accessibilityDump: file.accessibilityDump || '',
       domTree: file.domTree || '',

@@ -77,7 +77,8 @@ export async function handleTestLintCommand(
       {
         componentName: enrichedContext.testedComponent?.name || 'UnknownComponent',
         componentCode: enrichedContext.testedComponent?.content || '',
-        imports: Object.fromEntries(enrichedContext.relatedFiles || new Map()),
+        componentImports: Object.fromEntries(enrichedContext.componentImports || new Map()),
+        imports: Object.fromEntries(contextEnricher.getRelatedFilesContent(enrichedContext)),
         examples: {},
         extraContext: '',
       },

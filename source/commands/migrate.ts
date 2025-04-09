@@ -91,20 +91,19 @@ export async function handleMigrateCommand(
     );
 
     console.log(`Identified component: ${enrichedContext.testedComponent.name}`);
-    console.log(`Found ${enrichedContext.relatedFiles.size} related files`);
+    console.log(`Found ${enrichedContext.componentImports.size} direct imports and ${enrichedContext.relatedFiles.size} related files`);
 
     // Process the file through the workflow
     console.log('Starting migration workflow...');
     const result = await processSingleFile(
       inputPath,
       {
-        componentName: enrichedContext.testedComponent.name,
-        componentCode: enrichedContext.testedComponent.content,
-        imports: Object.fromEntries(enrichedContext.relatedFiles),
-        examples: enrichedContext.exampleTests
-          ? Object.fromEntries(enrichedContext.exampleTests)
-          : {},
-        extraContext: enrichedContext.extraContext,
+        componentName: enrichedContext.testedComponent?.name || 'UnknownComponent',
+        componentCode: enrichedContext.testedComponent?.content || '',
+        componentImports: Object.fromEntries(enrichedContext.componentImports || new Map()),
+        imports: Object.fromEntries(contextEnricher.getRelatedFilesContent(enrichedContext)),
+        examples: {},
+        extraContext: '',
       },
       {
         maxRetries: config.maxRetries,

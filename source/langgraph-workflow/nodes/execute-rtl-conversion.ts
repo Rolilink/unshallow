@@ -44,7 +44,7 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.imports),
+      componentFileImports: formatImports(file.context.componentImports || {}),
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: file.fixPlan.plan,
       migrationGuidelines: '',
