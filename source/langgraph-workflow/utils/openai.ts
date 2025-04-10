@@ -97,8 +97,111 @@ export type LintFixResponse = z.infer<typeof lintFixResponseSchema>;
 export type FixResponse = RtlFixResponse | TsFixResponse | LintFixResponse | RtlFixPlannerResponse | RtlFixExecutorResponse | RtlConversionPlannerResponse | RtlConversionExecutorResponse;
 
 /**
+ * Cleans markdown code blocks from a string
+ */
+function cleanMarkdownCodeBlocks(content: string): string {
+  let cleanContent = content.trim();
+
+  // Check if the content starts with a code block marker
+  if (cleanContent.startsWith('```')) {
+    // Remove the opening code block marker (```json or just ```)
+    cleanContent = cleanContent.replace(/^```(?:json|js|javascript|typescript|ts|gherkin|md|markdown|text)?\s*/m, '');
+
+    // Remove the closing code block marker
+    cleanContent = cleanContent.replace(/```\s*$/m, '');
+
+    console.log('Stripped markdown code block from response');
+  }
+
+  return cleanContent;
+}
+
+/**
+ * Preprocesses JSON content to fix common issues before parsing
+ * Especially targets code-related fields which often contain problematic characters
+ */
+function preprocessJsonContent(content: string): string {
+  try {
+    // First check if it's already valid JSON
+    JSON.parse(content);
+    return content; // If no error, return as is
+  } catch (error) {
+    console.log('JSON parsing failed, attempting to preprocess content...');
+
+    // Regex-based preprocessing for common issues
+
+    // Identify and fix single quotes in known code fields (rtl, plan, test, etc.)
+    // This targets fields that likely contain code snippets or test descriptions
+    let processed = content;
+
+    // Replace unescaped single quotes within string values
+    processed = processed.replace(/"((?:rtl|plan|test|code|updatedTestFile|explanation)[^"]*)":\s*"(.*?)"/gs, (match, fieldName, fieldValue) => {
+      // Escape any unescaped single quotes in the field value
+      const escapedValue = fieldValue.replace(/(?<!\\)'/g, "\\'");
+      return `"${fieldName}":"${escapedValue}"`;
+    });
+
+    // Fix invalid control characters
+    processed = processed.replace(/[\u0000-\u001F]+/g, "");
+
+    // Fix unescaped backslashes before quotes
+    processed = processed.replace(/([^\\])\\(?!")/g, "$1\\\\");
+
+    // Fix unbalanced quotes by checking for obvious issues
+    // This is a simple fix, not comprehensive
+    const openQuotes = (processed.match(/"/g) || []).length;
+    if (openQuotes % 2 !== 0) {
+      console.log('Detected unbalanced quotes, attempting basic fix');
+      // Find object boundaries to fix
+      processed = processed.replace(/\{([^{}]*)\}/g, (match, content) => {
+        const fixedContent = content.replace(/(?<!\\)"/g, (q, index, str) => {
+          // Count quotes before this one to determine if it should be escaped
+          const quotesBefore = (str.substring(0, index).match(/(?<!\\)"/g) || []).length;
+          return quotesBefore % 2 === 0 ? q : '\\"';
+        });
+        return `{${fixedContent}}`;
+      });
+    }
+
+    console.log('Preprocessing complete, attempting to parse JSON again');
+
+    // Verify if preprocessing fixed the issue
+    try {
+      JSON.parse(processed);
+      console.log('Preprocessing successfully fixed JSON issues');
+      return processed;
+    } catch (secondError) {
+      console.warn('Preprocessing could not fully fix JSON issues:', secondError);
+      return content; // Return original if preprocessing didn't help
+    }
+  }
+}
+
+/**
+ * Post-processes the parsed output to handle special fields
+ */
+function postProcessParsedOutput<T>(parsedOutput: T): T {
+  // For planner responses, replace escaped newlines with actual newlines in the plan field
+  if (parsedOutput && typeof parsedOutput === 'object' && 'plan' in parsedOutput) {
+    const output = parsedOutput as any;
+    // Replace escaped newlines with actual newlines
+    output.plan = output.plan.replace(/\\n/g, '\n');
+    console.log('Plan with unescaped newlines:', output.plan);
+  }
+
+  return parsedOutput;
+}
+
+/**
+ * Sleep function for exponential backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Calls OpenAI with the given prompt and returns structured output
- * Updated to support different model parameters
+ * Uses retry mechanism with exponential backoff for resilience
  */
 export async function callOpenAIStructured<T extends z.ZodType>({
   prompt,
@@ -113,15 +216,18 @@ export async function callOpenAIStructured<T extends z.ZodType>({
   temperature?: number;
   nodeName?: string;
 }): Promise<z.infer<T>> {
-  try {
-    // Create the parser
-    const parser = StructuredOutputParser.fromZodSchema(schema);
+  // Define retry parameters
+  const MAX_RETRIES = 5;
+  const BASE_DELAY_MS = 1000; // 1 second initial delay
 
-    // Get the format instructions
-    const formatInstructions = parser.getFormatInstructions();
+  // Create the parser
+  const parser = StructuredOutputParser.fromZodSchema(schema);
 
-    // Enhanced instructions with stricter JSON requirements
-    const enhancedFormatInstructions = `${formatInstructions}
+  // Get the format instructions
+  const formatInstructions = parser.getFormatInstructions();
+
+  // Enhanced instructions with stricter JSON requirements
+  const enhancedFormatInstructions = `${formatInstructions}
 
 IMPORTANT FORMATTING REQUIREMENTS:
 1. Your response MUST be valid JSON that perfectly matches the schema above.
@@ -134,69 +240,86 @@ IMPORTANT FORMATTING REQUIREMENTS:
 
 Return ONLY the JSON object and nothing else.`;
 
-    // Configure the LLM with appropriate options for the model
-    const llmOptions: any = {
-      modelName: model,
-      openAIApiKey: getApiKey(),
-      callbacks: [langfuseCallbackHandler],
-      response_format: { type: "json_object" },
-    };
+  // Retry loop
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`Attempt ${attempt}/${MAX_RETRIES} to call OpenAI structured API`);
 
-    // Only add temperature for models that support it
-    if (model !== 'o3-mini' && temperature !== undefined) {
-      llmOptions.temperature = temperature;
-    }
+      // Configure the LLM with appropriate options for the model
+      const llmOptions: any = {
+        modelName: model,
+        openAIApiKey: getApiKey(),
+        callbacks: [langfuseCallbackHandler],
+        response_format: { type: "json_object" },
+      };
 
-    const llm = new ChatOpenAI(llmOptions);
-
-    // Create a manual prompt that combines the user prompt and enhanced format instructions
-    const fullPrompt = `${prompt}\n\n${enhancedFormatInstructions}`;
-
-    // Add tags if nodeName is provided
-    const tags = nodeName ? [`node:${nodeName}`] : undefined;
-
-    // Use the LLM directly with structured output
-    const result = await llm.invoke([
-      {
-        type: "human",
-        content: fullPrompt
+      // Only add temperature for models that support it
+      if (model !== 'o3-mini' && temperature !== undefined) {
+        llmOptions.temperature = temperature;
+      } else if (model !== 'o3-mini') {
+        // Use a lower default temperature for more predictable JSON outputs
+        llmOptions.temperature = 0.0;
       }
-    ], { tags });
 
-    // Parse the response manually
-    const content = result.content.toString();
-    console.log('Received response, parsing structured output...');
+      const llm = new ChatOpenAI(llmOptions);
 
-    // Strip markdown code blocks if present
-    let cleanContent = content;
+      // Create a manual prompt that combines the user prompt and enhanced format instructions
+      const fullPrompt = `${prompt}\n\n${enhancedFormatInstructions}`;
 
-    // Check if the content starts with a code block marker
-    if (cleanContent.trim().startsWith('```')) {
-      // Remove the opening code block marker (```json or just ```)
-      cleanContent = cleanContent.replace(/^```(?:json|js|javascript|typescript|ts|gherkin|md|markdown|text)?\s*/m, '');
+      // Add tags if nodeName is provided
+      const tags = nodeName ? [`node:${nodeName}`] : undefined;
 
-      // Remove the closing code block marker
-      cleanContent = cleanContent.replace(/```\s*$/m, '');
+      // Use the LLM directly with structured output
+      const result = await llm.invoke([
+        {
+          type: "human",
+          content: fullPrompt
+        }
+      ], { tags });
 
-      console.log('Stripped markdown code block from response');
+      // Parse the response manually
+      const content = result.content.toString();
+      console.log('Received response, parsing structured output...');
+
+      // Clean markdown code blocks
+      const cleanContent = cleanMarkdownCodeBlocks(content);
+
+      // Preprocess the content to fix common JSON issues
+      const preprocessedContent = preprocessJsonContent(cleanContent);
+
+      // Parse the response with the parser
+      try {
+        const parsedOutput = await parser.parse(preprocessedContent);
+        console.log('Structured response successfully parsed');
+
+        // Post-process the output
+        return postProcessParsedOutput(parsedOutput);
+      } catch (parseError) {
+        // If JSON parsing still fails, log and throw to trigger retry
+        console.error('JSON parsing failed after preprocessing:', parseError instanceof Error ? parseError.message : String(parseError));
+        throw parseError;
+      }
+    } catch (error) {
+      // If this is the last attempt, throw the error
+      if (attempt === MAX_RETRIES) {
+        console.error(`All ${MAX_RETRIES} attempts failed:`, error);
+        throw error;
+      }
+
+      // Log the error for this attempt
+      console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+
+      // Calculate exponential backoff delay
+      const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.log(`Retrying in ${delayMs}ms...`);
+
+      // Wait before the next attempt with exponential backoff
+      await sleep(delayMs);
     }
-
-    // Parse the response with the parser
-    const parsedOutput = await parser.parse(cleanContent);
-    console.log('Structured response successfully parsed');
-
-    // For planner responses, replace escaped newlines with actual newlines in the plan field
-    if ('plan' in parsedOutput) {
-      // Replace escaped newlines with actual newlines
-      parsedOutput.plan = parsedOutput.plan.replace(/\\n/g, '\n');
-      console.log('Plan with unescaped newlines:', parsedOutput.plan);
-    }
-
-    return parsedOutput;
-  } catch (error) {
-    console.error('Error in OpenAI structured response:', error);
-    throw error;
   }
+
+  // This should never be reached due to the throw in the last attempt
+  throw new Error("Unexpected: Retry loop completed without success or error");
 }
 
 /**
