@@ -8,11 +8,10 @@ import { tsValidationNode } from './nodes/ts-validation.js';
 import { fixTsErrorNode } from './nodes/fix-ts-error.js';
 import { lintCheckNode } from './nodes/lint-check.js';
 import { fixLintErrorNode } from './nodes/fix-lint-error.js';
-import { extractAccessibilitySnapshotNode } from './nodes/extract-accessibility-snapshot.js';
-import { extractJestErrorsNode } from './nodes/extract-jest-errors.js';
 import { analyzeTestErrorsNode } from './nodes/analyze-test-errors.js';
 import { analyzeFailureNode } from './nodes/analyze-failure.js';
 import { executeRtlFixNode } from './nodes/execute-rtl-fix.js';
+import { parallelExtractionNode } from './nodes/parallel-extraction.js';
 import {
   hasTsCheckFailed,
   hasTsCheckPassed,
@@ -43,8 +42,7 @@ graph.addNode("load_test_file", loadTestFileNode)
 	.addNode("fix_ts_error", fixTsErrorNode)
 	.addNode("lint_check", lintCheckNode)
 	.addNode("fix_lint_error", fixLintErrorNode)
-	.addNode("extract_accessibility_snapshot", extractAccessibilitySnapshotNode)
-	.addNode("extract_jest_errors", extractJestErrorsNode)
+	.addNode("parallel_extraction", parallelExtractionNode)
 	.addNode("analyze_test_errors", analyzeTestErrorsNode)
 	.addNode("analyze_failure", analyzeFailureNode)
 	.addNode("execute_rtl_fix", executeRtlFixNode)
@@ -80,19 +78,18 @@ graph.addNode("load_test_file", loadTestFileNode)
 			if (state.file.currentStep === WorkflowStep.RUN_TEST_PASSED) {
 				return "validate_typescript";
 			} else if (state.file.currentStep === WorkflowStep.RUN_TEST_FAILED) {
-				return "extract_accessibility_snapshot";
+				return "parallel_extraction";
 			} else {
 				return "run_test";
 			}
 		},
 		{
 			validate_typescript: "ts_validation",
-			extract_accessibility_snapshot: "extract_accessibility_snapshot",
+			parallel_extraction: "parallel_extraction",
 			run_test: "run_test"
 		}
 	)
-	.addEdge("extract_accessibility_snapshot", "extract_jest_errors")
-	.addEdge("extract_jest_errors", "analyze_test_errors")
+	.addEdge("parallel_extraction", "analyze_test_errors")
 	.addConditionalEdges(
 		"analyze_test_errors",
 		(state) => {
