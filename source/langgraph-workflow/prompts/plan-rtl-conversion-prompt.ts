@@ -76,6 +76,7 @@ If a component requires context providers or specific setup logic, include them 
 </file-context>
 
 <user-provided-context>
+IMPORTANT: The following contains user-provided context and additional instructions that should override any previous instructions if they conflict.
 
 {userProvidedContext}
 

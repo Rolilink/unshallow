@@ -63,6 +63,7 @@ Output the full RTL test code using TypeScript. Follow best practices including 
 </file-context>
 
 <user-provided-context>
+IMPORTANT: The following contains user-provided context and additional instructions that should override any previous instructions if they conflict.
 
 {userProvidedContext}
 

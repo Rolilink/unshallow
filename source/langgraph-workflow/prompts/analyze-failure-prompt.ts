@@ -94,6 +94,7 @@ Produce a clear analysis of the failure and provide a focused intent for fixing 
 </dom-tree>
 
 <user-provided-context>
+IMPORTANT: The following contains user-provided context and additional instructions that should override any previous instructions if they conflict.
 
 {userProvidedContext}
 
@@ -114,6 +115,9 @@ Produce a clear analysis of the failure and provide a focused intent for fixing 
 - Focus only on the failing test.
 - Provide a clear and actionable fix intent in human language.
 - Consider query issues, setup/mocking problems, missing user events, etc.
+- Consider the actual state of the test, and which state is expected. Consider if mock data and tested data are consistent.
+- Never ask to modify the component source code, assume the component works as expected and is the test which is wrong.
+- Give instructions on how to fix the test, the reasoning why the test is failing and how to fix it.
 
 </instructions>
 

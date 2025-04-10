@@ -56,6 +56,7 @@ Return the full updated test file and explain the changes you made.
 </file-context>
 
 <user-provided-context>
+IMPORTANT: The following contains user-provided context and additional instructions that should override any previous instructions if they conflict.
 
 {userProvidedContext}
 
