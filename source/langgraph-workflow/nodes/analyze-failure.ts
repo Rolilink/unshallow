@@ -52,6 +52,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
       schema: AnalyzeFailureOutputSchema,
+      model: 'o3-mini',
       nodeName: 'analyze_failure'
     });
 

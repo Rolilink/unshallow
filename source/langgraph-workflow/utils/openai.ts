@@ -127,6 +127,7 @@ function preprocessJsonContent(content: string): string {
     return content; // If no error, return as is
   } catch (error) {
     console.log('JSON parsing failed, attempting to preprocess content...');
+    console.log('Error:', error instanceof Error ? error.message : String(error));
 
     // Regex-based preprocessing for common issues
 
@@ -134,11 +135,34 @@ function preprocessJsonContent(content: string): string {
     // This targets fields that likely contain code snippets or test descriptions
     let processed = content;
 
-    // Replace unescaped single quotes within string values
+    // Handle the specific case that's causing issues - single quotes in test names and strings
+    // This needs to happen BEFORE the general replacement
+    processed = processed.replace(/(it\()(['"])(.*?['"].*?)(\2)/g, (match, prefix, quote, content, endQuote) => {
+      // Replace any unescaped single quotes within the content with escaped ones
+      const escaped = content.replace(/(?<!\\)'/g, "\\'");
+      return `${prefix}${quote}${escaped}${endQuote}`;
+    });
+
+    // Replace unescaped single quotes within string values in JSON fields
     processed = processed.replace(/"((?:rtl|plan|test|code|updatedTestFile|explanation)[^"]*)":\s*"(.*?)"/gs, (match, fieldName, fieldValue) => {
       // Escape any unescaped single quotes in the field value
       const escapedValue = fieldValue.replace(/(?<!\\)'/g, "\\'");
-      return `"${fieldName}":"${escapedValue}"`;
+
+      // Further special handling for test and RTL code which often contains these patterns
+      let enhancedValue = escapedValue;
+      // Handle test descriptions and assertions with single quotes
+      enhancedValue = enhancedValue.replace(/(it\(|test\(|expect\(|describe\()(['"])(.*?)(\2)/g, (match, func, quote, content, endQuote) => {
+        const cleanContent = content.replace(/(?<!\\)'/g, "\\'");
+        return `${func}${quote}${cleanContent}${endQuote}`;
+      });
+
+      // Handle specific attribute matches like { name: /Pattern/i } or { name: 'string' }
+      enhancedValue = enhancedValue.replace(/(\{\s*name:\s*)(['"])(.*?)(\2)/g, (match, prefix, quote, content, endQuote) => {
+        const cleanContent = content.replace(/(?<!\\)'/g, "\\'");
+        return `${prefix}${quote}${cleanContent}${endQuote}`;
+      });
+
+      return `"${fieldName}":"${enhancedValue}"`;
     });
 
     // Fix invalid control characters
@@ -146,6 +170,15 @@ function preprocessJsonContent(content: string): string {
 
     // Fix unescaped backslashes before quotes
     processed = processed.replace(/([^\\])\\(?!")/g, "$1\\\\");
+
+    // Additional handling for specific JSON syntax issues that commonly occur
+    // Handle specific cases where a single quote is used within a string that's
+    // already within a JSON string (double nested quoting)
+    processed = processed.replace(/\\['"]([^'"]*?)['"](['"])/g, (match, content, endQuote) => {
+      // Make sure any internal quotes are properly escaped
+      const cleanContent = content.replace(/(?<!\\)'/g, "\\'").replace(/(?<!\\)"/g, '\\"');
+      return `\\"${cleanContent}\\"${endQuote}`;
+    });
 
     // Fix unbalanced quotes by checking for obvious issues
     // This is a simple fix, not comprehensive
@@ -171,7 +204,35 @@ function preprocessJsonContent(content: string): string {
       console.log('Preprocessing successfully fixed JSON issues');
       return processed;
     } catch (secondError) {
-      console.warn('Preprocessing could not fully fix JSON issues:', secondError);
+      console.warn('Preprocessing could not fully fix JSON issues:', secondError instanceof Error ? secondError.message : String(secondError));
+
+      // Last resort: Try to handle the case with regex pattern that specifically targets the position referenced in the error
+      if (secondError instanceof SyntaxError) {
+        const errorMessage = secondError.message;
+        const positionMatch = errorMessage.match(/position (\d+)/);
+        if (positionMatch && positionMatch[1]) {
+          const position = parseInt(positionMatch[1], 10);
+          console.log(`Attempting to fix JSON at specific position ${position}`);
+
+          // Create a buffer around the error position
+          const start = Math.max(0, position - 20);
+          const end = Math.min(processed.length, position + 20);
+          const snippet = processed.substring(start, end);
+          console.log(`Issue near: "${snippet}"`);
+
+          // Apply targeted fix for single quotes in test names which is a common issue
+          processed = processed.substring(0, position) + processed.substring(position).replace(/'/g, "\\'");
+
+          // Try parsing one more time
+          try {
+            JSON.parse(processed);
+            console.log('Last-resort position-specific fix worked!');
+            return processed;
+          } catch (finalError) {
+            console.warn('All preprocessing attempts failed');
+          }
+        }
+      }
       return content; // Return original if preprocessing didn't help
     }
   }
@@ -237,7 +298,7 @@ IMPORTANT FORMATTING REQUIREMENTS:
 5. Do not include any text, explanations, or markdown outside the JSON object.
 6. Double-check your response to make sure it is complete and properly closed with all brackets matched.
 7. Do not use any characters that would need escaping in JSON without proper escaping.
-
+8. Inside the it and describe block, do not use single quotes. example: incorrect: it('adds \'Milk\' to the list') correct: it(\"adds 'todo' to the list\")
 Return ONLY the JSON object and nothing else.`;
 
   // Retry loop
