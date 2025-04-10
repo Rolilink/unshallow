@@ -55,11 +55,11 @@ Return the full updated test file and explain the changes you made.
 
 </file-context>
 
-<user-feedback> <!-- Additional context provided by user -->
+<user-provided-context>
 
-{userFeedback}
+{userProvidedContext}
 
-</user-feedback>
+</user-provided-context>
 
 <test-error> <!-- Information about the failing test -->
 

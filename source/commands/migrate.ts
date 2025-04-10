@@ -102,8 +102,8 @@ export async function handleMigrateCommand(
         componentCode: enrichedContext.testedComponent?.content || '',
         componentImports: Object.fromEntries(enrichedContext.componentImports || new Map()),
         imports: Object.fromEntries(contextEnricher.getRelatedFilesContent(enrichedContext)),
-        examples: {},
-        extraContext: '',
+        examples: enrichedContext.exampleTests ? Object.fromEntries(enrichedContext.exampleTests) : {},
+        extraContext: enrichedContext.extraContext || '',
       },
       {
         maxRetries: config.maxRetries,

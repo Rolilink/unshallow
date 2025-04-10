@@ -5,6 +5,7 @@ import { executeRtlConversionPrompt } from '../prompts/execute-rtl-conversion-pr
 import { callOpenAIStructured } from '../utils/openai.js';
 import { z } from 'zod';
 import { formatImports } from '../utils/format-utils.js';
+import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 
 // Define the schema using Zod
 export const ExecuteRtlConversionOutputSchema = z.object({
@@ -47,8 +48,8 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       componentFileImports: formatImports(file.context.componentImports || {}),
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: file.fixPlan.plan,
-      migrationGuidelines: '',
-      supportingExamples: '' // Add the missing parameter
+      migrationGuidelines: migrationGuidelines,
+      supportingExamples: file.context.examples || ''
     });
 
     console.log(`[execute-rtl-conversion] Calling OpenAI to execute conversion`);

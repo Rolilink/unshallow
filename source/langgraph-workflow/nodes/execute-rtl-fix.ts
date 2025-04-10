@@ -44,7 +44,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
       componentFileImports: formatImports(file.context.componentImports || {}),
-      userFeedback: file.context.extraContext || '',
+      userProvidedContext: file.context.extraContext || '',
       testName: currentError.testName,
       normalizedError: currentError.normalized,
       rawError: currentError.message,

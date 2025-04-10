@@ -1,0 +1,24 @@
+# Todo for V0
+
+- Continue fixing prompts and blocks, the model is hallucinating because code blocks are not closed properly
+- Fix a11y snapshot: If the test fails to render let's not clear a11y snapshots.
+- Paralellize error and a11y extraction
+- Implement correct context following (through ~/.unshallow/context.txt)
+  - also implement a command to get the context file path
+- Implement correct configuration for languse (through ~/.unshallow/langfuse.json)
+  - also through a command that saves the configuration there.
+- Implement correct file replacing logic (through ./unshallow folders parallel to the test)
+  - logs.txt (will contain all logs of migrating this test)
+  - will need to implement a logger function and a --verbose option
+  - [test_name].attempt.spec.tsx will be the temporary file
+  - the folder will be deleted if the test passes.
+- Implement retry logic
+  - will look for ./unshallow folders.
+  - will start from the run test step and start fixing it
+  - if it failed on the lint or ts step will do as well
+  - requires `--retry` option
+- Implement meta report
+  - after running all the files it will collect summarize each log of the migration
+    - then will sumarize each summary in look for patterns and repeated errors
+    - it will provide and detailed .md summary with code examples
+    - it will also provide suggestions on how to modify the context.txt file

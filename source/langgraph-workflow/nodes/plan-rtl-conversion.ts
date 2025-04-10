@@ -34,7 +34,7 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
       componentSourceCode: file.context.componentCode, // Use component code directly
       componentFileImports: formatImports(file.context.imports),
       userProvidedContext: file.context.extraContext || '',
-      supportingExamples: ''
+      supportingExamples: file.context.examples ? JSON.stringify(file.context.examples) : ''
     });
 
     console.log(`[plan-rtl-conversion] Calling OpenAI to plan conversion`);

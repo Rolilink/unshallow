@@ -30,6 +30,8 @@ If a component requires context providers or specific setup logic, include them 
 - Avoid duplication across scenarios; consolidate where possible.
 - Return only the gherkin specification not surrounding \`\`\`gherkin\`\`\` tags.
 - On the plan response only include the gherkin specification and no more extra information or explanation.
+- Focus only on the component under test, don't include it's imports or other components.
+- Try to translate the existing test cases to RTL, add, replace or remove tests as needed.
 
 </instructions>
 
@@ -83,10 +85,8 @@ If a component requires context providers or specific setup logic, include them 
 
 <output-example>
 
-<plan-response>
-
 \`\`\`gherkin
-Feature: MyForm component behavior
+Feature: <ComponentName />
 
   Scenario: It should submit the form when the user provides valid input and clicks Save
     Given the user types "hello" into the input field

@@ -93,11 +93,11 @@ Produce a clear analysis of the failure and provide a focused intent for fixing 
 
 </dom-tree>
 
-<user-feedback> <!-- Additional context provided by user -->
+<user-provided-context>
 
-{userFeedback}
+{userProvidedContext}
 
-</user-feedback>
+</user-provided-context>
 
 <previous-code> <!-- Previously implemented test -->
 

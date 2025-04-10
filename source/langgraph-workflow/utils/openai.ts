@@ -120,12 +120,26 @@ export async function callOpenAIStructured<T extends z.ZodType>({
     // Get the format instructions
     const formatInstructions = parser.getFormatInstructions();
 
+    // Enhanced instructions with stricter JSON requirements
+    const enhancedFormatInstructions = `${formatInstructions}
+
+IMPORTANT FORMATTING REQUIREMENTS:
+1. Your response MUST be valid JSON that perfectly matches the schema above.
+2. Ensure all quotes are properly escaped: use \\" for quotes inside string values.
+3. Avoid using ANY control characters or line breaks within string values.
+4. For multi-line strings, use \\n to represent line breaks.
+5. Do not include any text, explanations, or markdown outside the JSON object.
+6. Double-check your response to make sure it is complete and properly closed with all brackets matched.
+7. Do not use any characters that would need escaping in JSON without proper escaping.
+
+Return ONLY the JSON object and nothing else.`;
+
     // Configure the LLM with appropriate options for the model
     const llmOptions: any = {
       modelName: model,
       openAIApiKey: getApiKey(),
       callbacks: [langfuseCallbackHandler],
-			response_format: { type: "json_object" },
+      response_format: { type: "json_object" },
     };
 
     // Only add temperature for models that support it
@@ -135,9 +149,8 @@ export async function callOpenAIStructured<T extends z.ZodType>({
 
     const llm = new ChatOpenAI(llmOptions);
 
-    // Create a manual prompt that combines the user prompt and format instructions
-    // Note: In the future, we might want to use the XML format in the prompts instead
-    const fullPrompt = `${prompt}\n\n${formatInstructions}`;
+    // Create a manual prompt that combines the user prompt and enhanced format instructions
+    const fullPrompt = `${prompt}\n\n${enhancedFormatInstructions}`;
 
     // Add tags if nodeName is provided
     const tags = nodeName ? [`node:${nodeName}`] : undefined;
@@ -160,7 +173,7 @@ export async function callOpenAIStructured<T extends z.ZodType>({
     // Check if the content starts with a code block marker
     if (cleanContent.trim().startsWith('```')) {
       // Remove the opening code block marker (```json or just ```)
-      cleanContent = cleanContent.replace(/^```(?:json|js|javascript|typescript|ts)?\s*/m, '');
+      cleanContent = cleanContent.replace(/^```(?:json|js|javascript|typescript|ts|gherkin|md|markdown|text)?\s*/m, '');
 
       // Remove the closing code block marker
       cleanContent = cleanContent.replace(/```\s*$/m, '');
