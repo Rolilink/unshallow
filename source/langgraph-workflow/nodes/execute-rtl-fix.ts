@@ -61,6 +61,8 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
       schema: ExecuteRtlFixOutputSchema,
+      // Use o3-mini if reasoningExecution is enabled
+      model: state.file.reasoningExecution ? 'o3-mini' : 'gpt-4o-mini',
       nodeName: 'execute_rtl_fix'
     });
 

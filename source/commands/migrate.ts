@@ -22,6 +22,10 @@ export interface MigrateOptions {
   lintFixCmd?: string;
   tsCheckCmd?: string;
   testCmd?: string;
+  reasoning?: boolean;            // Use o3-mini for planning, execution, and reflection
+  reasoningPlanning?: boolean;    // Use o3-mini for planning steps only
+  reasoningExecution?: boolean;   // Use o3-mini for execution steps only
+  reasoningReflection?: boolean;  // Use o3-mini for reflection steps only
 }
 
 /**
@@ -98,7 +102,11 @@ Add common usage patterns for your components here.
       lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
       lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
       tsCheckCmd: options.tsCheckCmd || 'yarn ts:check',
-      testCmd: options.testCmd || 'yarn test'
+      testCmd: options.testCmd || 'yarn test',
+      // If --reasoning is provided, enable all reasoning options
+      reasoningPlanning: options.reasoning || options.reasoningPlanning || false,
+      reasoningExecution: options.reasoning || options.reasoningExecution || false,
+      reasoningReflection: options.reasoning || options.reasoningReflection || false
     };
 
     // Log command execution
@@ -149,7 +157,11 @@ Add common usage patterns for your components here.
         lintCheckCmd: config.lintCheckCmd,
         lintFixCmd: config.lintFixCmd,
         tsCheckCmd: config.tsCheckCmd,
-        testCmd: config.testCmd
+        testCmd: config.testCmd,
+        // Pass only the specific reasoning flags
+        reasoningPlanning: config.reasoningPlanning,
+        reasoningExecution: config.reasoningExecution,
+        reasoningReflection: config.reasoningReflection
       }
     );
 

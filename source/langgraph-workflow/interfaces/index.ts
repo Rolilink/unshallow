@@ -29,6 +29,11 @@ export interface WorkflowOptions {
   tsCheckCmd?: string;
   testCmd?: string;
   useFixLoop?: boolean;
+
+  // Options to control which model is used in different parts of the workflow
+  reasoningPlanning?: boolean;    // Use o3-mini for planning steps only
+  reasoningExecution?: boolean;   // Use o3-mini for execution steps only
+  reasoningReflection?: boolean;  // Use o3-mini for reflection steps only
 }
 
 /**
@@ -198,6 +203,11 @@ export interface FileState {
   currentError?: TrackedError | null;
   totalAttempts?: number;
   fixIntent?: string;
+
+  // Properties for the reasoning model selection
+  reasoningPlanning?: boolean;
+  reasoningExecution?: boolean;
+  reasoningReflection?: boolean;
 }
 
 /**

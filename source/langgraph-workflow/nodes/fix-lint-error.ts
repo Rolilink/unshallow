@@ -77,6 +77,8 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
       schema: lintFixResponseSchema,
+      // Use o3-mini if reasoningExecution is enabled
+      model: state.file.reasoningExecution ? 'o3-mini' : 'gpt-4o-mini',
       nodeName: 'fix_lint_error'
     });
 

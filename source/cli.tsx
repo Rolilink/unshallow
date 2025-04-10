@@ -76,6 +76,22 @@ program
 		'--api-key <key>',
 		'OpenAI API key to use for this command (overrides config)',
 	)
+	.option(
+		'--reasoning',
+		'Use o3-mini model for planning, execution, and reflection steps (faster, less accurate)',
+	)
+	.option(
+		'--reasoning-planning',
+		'Use o3-mini model for planning steps only',
+	)
+	.option(
+		'--reasoning-execution',
+		'Use o3-mini model for execution steps only',
+	)
+	.option(
+		'--reasoning-reflection',
+		'Use o3-mini model for reflection steps only',
+	)
 	.action(async (inputPath, options) => {
 		const exitCode = await handleMigrateCommand(inputPath, options);
 		process.exit(exitCode);

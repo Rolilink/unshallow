@@ -52,7 +52,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
       schema: AnalyzeFailureOutputSchema,
-      model: 'o3-mini',
+      model: state.file.reasoningReflection ? 'o3-mini' : 'gpt-4o-mini',
       nodeName: 'analyze_failure'
     });
 

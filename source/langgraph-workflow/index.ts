@@ -200,6 +200,11 @@ export function createWorkflow(
 			trackedErrors: {},
 			totalAttempts: 0,
 			accessibilityDump: '',
+
+			// Pass reasoning flags to file state for access in nodes
+			reasoningPlanning: options?.reasoningPlanning || false,
+			reasoningExecution: options?.reasoningExecution || false,
+			reasoningReflection: options?.reasoningReflection || false,
 		},
 	};
 
