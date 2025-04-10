@@ -34,6 +34,20 @@ export class ConfigManager {
   }
 
   /**
+   * Get the default context file path
+   */
+  getDefaultContextFilePath(): string {
+    return path.join(this.configDir, 'context.md');
+  }
+
+  /**
+   * Check if the default context file exists
+   */
+  hasDefaultContextFile(): boolean {
+    return fs.existsSync(this.getDefaultContextFilePath());
+  }
+
+  /**
    * Set the OpenAI API key
    */
   setOpenAIKey(apiKey: string): void {

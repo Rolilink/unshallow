@@ -5,6 +5,7 @@ import {handleContextEnricherCommand} from './commands/context-enricher.js';
 import {handleSetApiKeyCommand, handleGetApiKeyCommand} from './commands/config.js';
 import {handleTestLintCommand} from './commands/test-lint.js';
 import {handleExportTracesCommand} from './commands/export-traces.js';
+import {handleGetContextPathCommand} from './commands/get-context-path.js';
 
 // Create the main program
 const program = new Command()
@@ -52,10 +53,6 @@ program
 		'Comma-separated list of example tests to use as references',
 	)
 	.option(
-		'--context-file <path>',
-		'Path to a text file with additional context for the migration',
-	)
-	.option(
 		'--lint-check-cmd <command>',
 		'Custom command for lint checking',
 		'yarn lint:check',
@@ -97,10 +94,6 @@ program
 	.option(
 		'--examples <paths>',
 		'Comma-separated list of example tests to use as references'
-	)
-	.option(
-		'--context-file <path>',
-		'Path to a text file with additional context'
 	)
 	.option(
 		'--output-format <format>',
@@ -162,6 +155,15 @@ program
 	)
 	.action(async (options) => {
 		const exitCode = await handleExportTracesCommand(options);
+		process.exit(exitCode);
+	});
+
+// Add the get-context-path command
+program
+	.command('get-context-path')
+	.description('Get or create the default context file path')
+	.action(async () => {
+		const exitCode = await handleGetContextPathCommand();
 		process.exit(exitCode);
 	});
 

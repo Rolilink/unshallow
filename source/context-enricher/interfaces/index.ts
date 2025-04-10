@@ -7,9 +7,6 @@ export interface EnrichmentOptions {
 
   /** Paths to example tests to use as references */
   exampleTests?: string[];
-
-  /** Path to a file containing extra context */
-  extraContextFile?: string;
 }
 
 /**

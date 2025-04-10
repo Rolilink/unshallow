@@ -1,5 +1,7 @@
 import * as path from 'path';
 import { ContextEnricher } from '../context-enricher/index.js';
+import { ConfigManager } from '../config/config-manager.js';
+import * as fsSync from 'fs';
 
 /**
  * Options for the context-enricher command
@@ -7,7 +9,6 @@ import { ContextEnricher } from '../context-enricher/index.js';
 export interface ContextEnricherOptions {
   importDepth?: string;
   examples?: string;
-  contextFile?: string;
   outputFormat?: string;
 }
 
@@ -25,6 +26,22 @@ export async function handleContextEnricherCommand(
     // Create the context enricher
     const contextEnricher = new ContextEnricher(projectRoot);
 
+    // Ensure default context file exists
+    const configManager = new ConfigManager();
+    const contextFilePath = configManager.getDefaultContextFilePath();
+    const contextDir = path.dirname(contextFilePath);
+
+    if (!fsSync.existsSync(contextDir)) {
+      fsSync.mkdirSync(contextDir, { recursive: true });
+    }
+
+    if (!fsSync.existsSync(contextFilePath)) {
+      // Create default context file with template
+      const templateContent = ``;
+      fsSync.writeFileSync(contextFilePath, templateContent, 'utf8');
+      console.log(`Created default context file at: ${contextFilePath}`);
+    }
+
     // Resolve the test file path
     const absoluteTestFilePath = path.isAbsolute(testFilePath)
       ? testFilePath
@@ -33,13 +50,13 @@ export async function handleContextEnricherCommand(
     // Configure options
     const enrichmentOptions = {
       importDepth: options.importDepth ? parseInt(options.importDepth, 10) : 1,
-      exampleTests: options.examples ? options.examples.split(',').map(p => p.trim()) : undefined,
-      extraContextFile: options.contextFile
+      exampleTests: options.examples ? options.examples.split(',').map(p => p.trim()) : undefined
     };
 
     // Log what we're going to do
     console.log('Enriching context for test file:', testFilePath);
     console.log('Options:', JSON.stringify(enrichmentOptions, null, 2));
+    console.log('Using default context file at:', contextFilePath);
 
     try {
       // Process the test file asynchronously and get results
@@ -103,7 +120,7 @@ export async function handleContextEnricherCommand(
         }
 
         if (enrichedContext.extraContext) {
-          console.log('\nExtra Context: Loaded from', options.contextFile);
+          console.log('\nExtra Context: Loaded from default context file');
           console.log('\nExtra Context Content:');
           console.log('------------------------');
           console.log(enrichedContext.extraContext);

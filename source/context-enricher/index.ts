@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as ts from 'typescript';
 import { EnrichmentOptions, EnrichedContext } from './interfaces/index.js';
 import { resolveImportPath, fileExists } from './utils/file-utils.js';
+import { ConfigManager } from '../config/config-manager.js';
+import * as fsSync from 'fs';
 
 /**
  * The ContextEnricher analyzes test files to extract contextual information
@@ -124,22 +126,20 @@ export class ContextEnricher {
         }
       }
 
-      // Process extra context file if provided
-      if (options.extraContextFile) {
-        try {
-          const absolutePath = path.isAbsolute(options.extraContextFile)
-            ? options.extraContextFile
-            : path.resolve(this.projectRoot, options.extraContextFile);
+      // Always try to load the default context file
+      try {
+        const configManager = new ConfigManager();
+        const defaultContextPath = configManager.getDefaultContextFilePath();
 
-          if (fileExists(absolutePath)) {
-            context.extraContext = await fs.readFile(absolutePath, 'utf8');
-          }
-        } catch (error) {
-          console.warn(
-            `Failed to load extra context file ${options.extraContextFile}:`,
-            error,
-          );
+        if (fsSync.existsSync(defaultContextPath)) {
+          context.extraContext = await fs.readFile(defaultContextPath, 'utf8');
+          console.log(`Loaded default context file from: ${defaultContextPath}`);
         }
+      } catch (error) {
+        console.warn(
+          `Failed to load default context file:`,
+          error,
+        );
       }
 
       return context;

@@ -1,10 +1,5 @@
 # Todo for V0
 
-- Continue fixing prompts and blocks, the model is hallucinating because code blocks are not closed properly
-- Fix a11y snapshot: If the test fails to render let's not clear a11y snapshots.
-- Paralellize error and a11y extraction
-- Implement correct context following (through ~/.unshallow/context.txt)
-  - also implement a command to get the context file path
 - Implement correct configuration for languse (through ~/.unshallow/langfuse.json)
   - also through a command that saves the configuration there.
 - Implement correct file replacing logic (through ./unshallow folders parallel to the test)

@@ -7,6 +7,7 @@ import { processSingleFile } from '../langgraph-workflow/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ConfigManager } from '../config/config-manager.js';
+import * as fsSync from 'fs';
 
 // Type definition for command options
 export interface MigrateOptions {
@@ -17,7 +18,6 @@ export interface MigrateOptions {
   pattern?: string;
   importDepth?: string;
   examples?: string;
-  contextFile?: string;
   lintCheckCmd?: string;
   lintFixCmd?: string;
   tsCheckCmd?: string;
@@ -46,6 +46,44 @@ export async function handleMigrateCommand(
       return 1;
     }
 
+    // Ensure default context file exists
+    const contextFilePath = configManager.getDefaultContextFilePath();
+    const contextDir = path.dirname(contextFilePath);
+
+    if (!fsSync.existsSync(contextDir)) {
+      fsSync.mkdirSync(contextDir, { recursive: true });
+    }
+
+    if (!fsSync.existsSync(contextFilePath)) {
+      // Create default context file with template
+      const templateContent = `# Additional Context for Test Conversion
+
+This file contains additional context that will be used by unshallow when converting Enzyme tests to React Testing Library.
+
+## Component Behavior
+
+Add information about specific component behaviors or quirks here.
+
+## Testing Strategy
+
+Add information about your preferred testing strategies here.
+
+## Special Cases
+
+Add information about special cases or edge cases here.
+
+## Mocking Guidelines
+
+Add information about mocking strategies and patterns here.
+
+## Example Usage Patterns
+
+Add common usage patterns for your components here.
+`;
+      fsSync.writeFileSync(contextFilePath, templateContent, 'utf8');
+      console.log(`Created default context file at: ${contextFilePath}`);
+    }
+
     // Configure options for migration
     const config = {
       skipTs: options.skipTsCheck || false,
@@ -57,7 +95,6 @@ export async function handleMigrateCommand(
       exampleTests: options.examples
         ? options.examples.split(',').map((path) => path.trim())
         : undefined,
-      extraContextFile: options.contextFile,
       lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
       lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
       tsCheckCmd: options.tsCheckCmd || 'yarn ts:check',
@@ -85,8 +122,7 @@ export async function handleMigrateCommand(
       inputPath,
       {
         importDepth: config.importDepth,
-        exampleTests: config.exampleTests,
-        extraContextFile: config.extraContextFile,
+        exampleTests: config.exampleTests
       }
     );
 
