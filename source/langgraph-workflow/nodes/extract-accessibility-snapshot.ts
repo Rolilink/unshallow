@@ -23,8 +23,9 @@ export const extractAccessibilitySnapshotNode = async (state: WorkflowState): Pr
       return {
         file: {
           ...file,
-          accessibilityDump: '',
-          domTree: '',
+          // Preserve existing values if present, otherwise use empty string
+          accessibilityDump: file.accessibilityDump || '',
+          domTree: file.domTree || '',
         },
       };
     }
@@ -53,19 +54,21 @@ export const extractAccessibilitySnapshotNode = async (state: WorkflowState): Pr
     return {
       file: {
         ...file,
-        accessibilityDump: response.accessibilityDump,
-        domTree: response.domTree,
+        // Only update if the extracted values have content
+        accessibilityDump: response.accessibilityDump || file.accessibilityDump || '',
+        domTree: response.domTree || file.domTree || '',
       },
     };
   } catch (error) {
     console.error(`[extract-accessibility-snapshot] Error: ${error instanceof Error ? error.message : String(error)}`);
 
-    // If there's an error, continue with the workflow but with empty accessibility information
+    // If there's an error, preserve existing values
     return {
       file: {
         ...file,
-        accessibilityDump: '',
-        domTree: '',
+        // Preserve existing values if present
+        accessibilityDump: file.accessibilityDump || '',
+        domTree: file.domTree || '',
       },
     };
   }
