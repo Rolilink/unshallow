@@ -2,7 +2,10 @@
 import {Command} from 'commander';
 import {handleMigrateCommand} from './commands/migrate.js';
 import {handleContextEnricherCommand} from './commands/context-enricher.js';
-import {handleSetApiKeyCommand, handleGetApiKeyCommand} from './commands/config.js';
+import {
+	handleSetApiKeyCommand,
+	handleGetApiKeyCommand,
+} from './commands/config.js';
 import {handleTestLintCommand} from './commands/test-lint.js';
 import {handleGetContextPathCommand} from './commands/get-context-path.js';
 import {handleSetLangfuseConfigCommand} from './commands/set-langfuse-config.js';
@@ -14,9 +17,7 @@ const program = new Command()
 	.version('0.0.1');
 
 // Add the config command
-program
-	.command('config')
-	.description('Configuration management');
+program.command('config').description('Configuration management');
 
 // Add get API key command
 program
@@ -32,7 +33,7 @@ program
 	.command('config:set-api-key')
 	.description('Set the OpenAI API key')
 	.argument('<key>', 'OpenAI API key')
-	.action(async (key) => {
+	.action(async key => {
 		const exitCode = handleSetApiKeyCommand(key);
 		process.exit(exitCode);
 	});
@@ -41,7 +42,10 @@ program
 program
 	.command('set-langfuse-config')
 	.description('Configure Langfuse for telemetry and tracing')
-	.argument('[config]', 'JSON configuration with secretKey, publicKey, and baseUrl')
+	.argument(
+		'[config]',
+		'JSON configuration with secretKey, publicKey, and baseUrl',
+	)
 	.option('--enable', 'Enable Langfuse logging')
 	.option('--disable', 'Disable Langfuse logging')
 	.action(async (config, options) => {
@@ -92,19 +96,18 @@ program
 		'--reasoning',
 		'Use o3-mini model for planning, execution, and reflection steps (faster, less accurate)',
 	)
-	.option(
-		'--reasoning-planning',
-		'Use o3-mini model for planning steps only',
-	)
-	.option(
-		'--reasoning-execution',
-		'Use o3-mini model for execution steps only',
-	)
+	.option('--reasoning-planning', 'Use o3-mini model for planning steps only')
+	.option('--reasoning-execution', 'Use o3-mini model for execution steps only')
 	.option(
 		'--reasoning-reflection',
 		'Use o3-mini model for reflection steps only',
 	)
+	.option('--debug', 'Enable verbose debug output', false)
 	.action(async (inputPath, options) => {
+		console.log(
+			'Starting migration with options:',
+			JSON.stringify(options, null, 2),
+		);
 		const exitCode = await handleMigrateCommand(inputPath, options);
 		process.exit(exitCode);
 	});
@@ -114,19 +117,15 @@ program
 	.command('context-enricher')
 	.description('Analyze a test file and extract contextual information')
 	.argument('<testFilePath>', 'Path to the test file to analyze')
-	.option(
-		'--import-depth <number>',
-		'Depth for AST import analysis',
-		'1'
-	)
+	.option('--import-depth <number>', 'Depth for AST import analysis', '1')
 	.option(
 		'--examples <paths>',
-		'Comma-separated list of example tests to use as references'
+		'Comma-separated list of example tests to use as references',
 	)
 	.option(
 		'--output-format <format>',
 		'Output format (pretty or json)',
-		'pretty'
+		'pretty',
 	)
 	.action(async (testFilePath, options) => {
 		const exitCode = await handleContextEnricherCommand(testFilePath, options);
@@ -149,10 +148,7 @@ program
 		'Custom command for lint fixing',
 		'yarn lint:fix',
 	)
-	.option(
-		'--output-file <path>',
-		'Output file to write the fixed content to',
-	)
+	.option('--output-file <path>', 'Output file to write the fixed content to')
 	.action(async (inputPath, options) => {
 		const exitCode = await handleTestLintCommand(inputPath, options);
 		process.exit(exitCode);
