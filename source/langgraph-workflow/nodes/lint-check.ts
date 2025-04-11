@@ -2,6 +2,8 @@ import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { logger } from '../utils/logging-callback.js';
+import { stripAnsiCodes } from '../utils/openai.js';
 
 const execAsync = promisify(exec);
 
@@ -16,12 +18,18 @@ interface ExecError extends Error {
  */
 export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'lint-check';
 
-  console.log(`[lint-check] Checking: ${file.path}`);
+  // Use our tracked lint attempts if in the fix loop
+  const attemptNumber = file.currentStep === WorkflowStep.LINT_CHECK_FAILED
+    ? logger.getAttemptCount('lint-fix')
+    : logger.incrementAttemptCount('lint');
+
+  await logger.logNodeStart(NODE_NAME, `Checking linting (attempt #${attemptNumber}): ${file.path}`);
 
   // Skip if configured to skip lint
   if (file.skipLint) {
-    console.log(`[lint-check] Skipped (skipLint enabled)`);
+    await logger.info(NODE_NAME, `Skipped (skipLint enabled)`);
     return {
       file: {
         ...file,
@@ -40,25 +48,71 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
 
     // First try to auto-fix linting issues
     const lintFixCmd = file.commands.lintFix || 'yarn lint:fix';
+    const autoFixCommand = `${lintFixCmd} ${fileToCheck}`;
 
-    console.log(`[lint-check] Auto-fixing with: ${lintFixCmd}`);
+    await logger.info(NODE_NAME, `Auto-fixing with: ${autoFixCommand}`);
+
+    let fixStdout = '';
+    let fixStderr = '';
+    let fixExitCode = 0;
 
     try {
-      await execAsync(`${lintFixCmd} ${fileToCheck}`);
+      const result = await execAsync(autoFixCommand);
+      fixStdout = result.stdout || '';
+      fixStderr = result.stderr || '';
     } catch (fixError) {
-      console.warn(`[lint-check] Auto-fix failed, continuing with check`);
+      const execError = fixError as ExecError;
+      fixStdout = execError.stdout || '';
+      fixStderr = execError.stderr || '';
+      fixExitCode = 1;
+      await logger.info(NODE_NAME, `Auto-fix failed, continuing with check`);
     }
+
+    // Clean up ANSI codes
+    fixStdout = stripAnsiCodes(fixStdout);
+    fixStderr = stripAnsiCodes(fixStderr);
+
+    // Log the auto-fix command results
+    await logger.logCommand(
+      NODE_NAME,
+      autoFixCommand,
+      fixStdout,
+      fixStderr,
+      fixExitCode,
+      'lint-fix-command'
+    );
 
     // Run the lint check command
     const lintCheckCmd = file.commands.lintCheck || 'yarn lint:check';
+    const checkCommand = `${lintCheckCmd} ${fileToCheck}`;
 
-    console.log(`[lint-check] Executing: ${lintCheckCmd}`);
+    await logger.info(NODE_NAME, `Executing: ${checkCommand}`);
+
+    let checkStdout = '';
+    let checkStderr = '';
+    let checkExitCode = 0;
 
     try {
       // Try to run the lint check
-      await execAsync(`${lintCheckCmd} ${fileToCheck}`);
+      const result = await execAsync(checkCommand);
+      checkStdout = result.stdout || '';
+      checkStderr = result.stderr || '';
 
-      console.log(`[lint-check] Passed`);
+      // Clean up ANSI codes
+      checkStdout = stripAnsiCodes(checkStdout);
+      checkStderr = stripAnsiCodes(checkStderr);
+
+      // Log the check command results
+      await logger.logCommand(
+        NODE_NAME,
+        checkCommand,
+        checkStdout,
+        checkStderr,
+        checkExitCode,
+        file.currentStep === WorkflowStep.LINT_CHECK_FAILED ? 'lint-fix' : 'lint'
+      );
+
+      await logger.success(NODE_NAME, `Lint check passed`);
 
       // Lint check passed
       return {
@@ -77,11 +131,26 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
 
       // Extract error message from the error object
       const errorOutput = lintError.message || '';
-      const stdout = lintError.stdout || '';
-      const stderr = lintError.stderr || '';
+      checkStdout = lintError.stdout || '';
+      checkStderr = lintError.stderr || '';
+      checkExitCode = 1;
+
+      // Clean up ANSI codes
+      checkStdout = stripAnsiCodes(checkStdout);
+      checkStderr = stripAnsiCodes(checkStderr);
+
+      // Log the check command results
+      await logger.logCommand(
+        NODE_NAME,
+        checkCommand,
+        checkStdout,
+        checkStderr,
+        checkExitCode,
+        file.currentStep === WorkflowStep.LINT_CHECK_FAILED ? 'lint-fix' : 'lint'
+      );
 
       // Combine all potential sources of error messages
-      const combinedOutput = [errorOutput, stdout, stderr].filter(Boolean).join('\n');
+      const combinedOutput = [errorOutput, checkStdout, checkStderr].filter(Boolean).join('\n');
 
       // Get the list of errors
       let errors: string[] = [];
@@ -94,13 +163,10 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
           .filter(line => !line.includes('info Visit')); // exclude yarn info messages
       }
 
-      console.log(`[lint-check] Failed with ${errors.length} errors`);
+      await logger.error(NODE_NAME, `Lint check failed with ${errors.length} errors`);
 
-      // Show only a few sample errors
-      if (errors.length > 0) {
-        const sampleErrors = errors.slice(0, 3).join('\n');
-        console.log(`[lint-check] Error samples:\n${sampleErrors}${errors.length > 3 ? '\n...' : ''}`);
-      }
+      // Log all lint errors
+      await logger.logErrors(NODE_NAME, errors, "Lint errors");
 
       return {
         file: {
@@ -115,7 +181,7 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
       };
     }
   } catch (error) {
-    console.error(`[lint-check] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error during lint check`, error);
 
     return {
       file: {

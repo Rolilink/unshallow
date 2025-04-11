@@ -3,6 +3,8 @@ import { NodeResult } from '../interfaces/node.js';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { logger } from '../utils/logging-callback.js';
+import { stripAnsiCodes } from '../utils/openai.js';
 
 const execAsync = promisify(exec);
 
@@ -11,12 +13,18 @@ const execAsync = promisify(exec);
  */
 export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'ts-validation';
 
-  console.log(`[ts-validation] Validating TypeScript: ${file.path}`);
+  // Use our tracked TS attempts if in the fix loop
+  const attemptNumber = file.currentStep === WorkflowStep.TS_VALIDATION_FAILED
+    ? logger.getAttemptCount('ts-fix')
+    : logger.incrementAttemptCount('ts');
+
+  await logger.logNodeStart(NODE_NAME, `Validating TypeScript (attempt #${attemptNumber}): ${file.path}`);
 
   // Skip if configured to skip TS validation
   if (file.skipTs) {
-    console.log(`[ts-validation] Skipped (skipTs enabled)`);
+    await logger.info(NODE_NAME, `Skipped (skipTs enabled)`);
     return {
       file: {
         ...file,
@@ -36,22 +44,47 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
 
     // Run TypeScript validation with custom command if provided
     const tsCheckCmd = file.commands.tsCheck || 'yarn ts:check';
+    const fullCommand = `${tsCheckCmd} ${tempFile}`;
 
-    console.log(`[ts-validation] Executing: ${tsCheckCmd}`);
+    await logger.info(NODE_NAME, `Executing: ${fullCommand}`);
 
-    const { stderr } = await execAsync(`${tsCheckCmd} ${tempFile}`);
+    let stdout = '';
+    let stderr = '';
+    let exitCode = 0;
+
+    try {
+      const result = await execAsync(fullCommand);
+      stdout = result.stdout || '';
+      stderr = result.stderr || '';
+    } catch (execError: any) {
+      // When a command fails, exec throws an error with the exit code
+      stdout = execError.stdout || '';
+      stderr = execError.stderr || '';
+      exitCode = execError.code || 1;
+    }
+
+    // Clean up ANSI codes
+    stdout = stripAnsiCodes(stdout);
+    stderr = stripAnsiCodes(stderr);
+
+    // Log the complete command output
+    await logger.logCommand(
+      NODE_NAME,
+      fullCommand,
+      stdout,
+      stderr,
+      exitCode,
+      file.currentStep === WorkflowStep.TS_VALIDATION_FAILED ? 'ts-fix' : 'ts'
+    );
 
     // Check for TS errors
     if (stderr && stderr.toLowerCase().includes('error')) {
       const errors = stderr.split('\n').filter(line => line.includes('error'));
 
-      console.log(`[ts-validation] Failed with ${errors.length} errors`);
+      await logger.error(NODE_NAME, `TypeScript validation failed with ${errors.length} errors`);
 
-      // Show only a few sample errors
-      if (errors.length > 0) {
-        const sampleErrors = errors.slice(0, 3).join('\n');
-        console.log(`[ts-validation] Error samples:\n${sampleErrors}${errors.length > 3 ? '\n...' : ''}`);
-      }
+      // Log all errors
+      await logger.logErrors(NODE_NAME, errors, "TypeScript errors");
 
       return {
         file: {
@@ -65,7 +98,7 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
       };
     }
 
-    console.log(`[ts-validation] Passed`);
+    await logger.success(NODE_NAME, `TypeScript validation passed`);
 
     // TS validation succeeded
     return {
@@ -79,7 +112,7 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
       },
     };
   } catch (error) {
-    console.error(`[ts-validation] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error during TypeScript validation`, error);
 
     return {
       file: {

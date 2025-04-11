@@ -5,6 +5,7 @@ import { PromptTemplate } from "@langchain/core/prompts";
 import { executeRtlConversionPrompt } from '../prompts/execute-rtl-conversion-prompt.js';
 import { z } from 'zod';
 import { formatImports } from '../utils/format-utils.js';
+import { logger } from '../utils/logging-callback.js';
 
 // Define schema for convertToRtl output
 export const ConvertToRtlOutputSchema = z.object({
@@ -24,8 +25,9 @@ export const convertToRtlTemplate = PromptTemplate.fromTemplate(executeRtlConver
  */
 export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'convert-to-rtl';
 
-  console.log(`[convert-to-rtl] Converting: ${file.path}`);
+  await logger.logNodeStart(NODE_NAME, `Converting: ${file.path}`);
 
   try {
     // Format the prompt using the template with properly formatted code blocks
@@ -41,7 +43,7 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
       supportingExamples: ''
     });
 
-    console.log(`[convert-to-rtl] Calling OpenAI for conversion`);
+    await logger.info(NODE_NAME, `Calling OpenAI for conversion`);
 
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured({
@@ -49,8 +51,9 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
       schema: rtlConversionExecutorSchema
     });
 
-    // Log the full explanation
-    console.log(`[convert-to-rtl] Conversion explanation: ${response.explanation}`);
+    // Log the RTL test and explanation
+    await logger.logRtlTest(NODE_NAME, response.testContent.trim(), response.explanation);
+    await logger.success(NODE_NAME, `Conversion completed`);
 
     // Return the updated state with the generated test
     return {
@@ -62,7 +65,7 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
       },
     };
   } catch (error) {
-    console.error(`[convert-to-rtl] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error converting to RTL`, error);
 
     return {
       file: {
@@ -80,8 +83,9 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
  */
 export const convertToRtlNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'convert-to-rtl';
 
-  console.log(`[convert-to-rtl] Converting Enzyme test to RTL directly`);
+  await logger.logNodeStart(NODE_NAME, `Converting Enzyme test to RTL directly`);
 
   try {
     // Format the prompt using the template
@@ -97,7 +101,7 @@ export const convertToRtlNode = async (state: WorkflowState): Promise<NodeResult
       supportingExamples: ''
     });
 
-    console.log(`[convert-to-rtl] Calling OpenAI to convert test`);
+    await logger.info(NODE_NAME, `Calling OpenAI to convert test`);
 
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured({
@@ -108,7 +112,9 @@ export const convertToRtlNode = async (state: WorkflowState): Promise<NodeResult
       nodeName: 'convert_to_rtl'
     });
 
-    console.log(`[convert-to-rtl] Conversion complete`);
+    // Log the generated RTL test
+    await logger.logRtlTest(NODE_NAME, response.rtl);
+    await logger.success(NODE_NAME, `Conversion complete`);
 
     // Return the updated state with the generated RTL test
     return {
@@ -120,7 +126,7 @@ export const convertToRtlNode = async (state: WorkflowState): Promise<NodeResult
       },
     };
   } catch (error) {
-    console.error(`[convert-to-rtl] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error during direct RTL conversion`, error);
 
     // If there's an error, mark the process as failed
     return {

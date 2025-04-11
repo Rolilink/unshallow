@@ -21,7 +21,7 @@ import {
 } from './edges.js';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { langfuseCallbackHandler } from '../langfuse.js';
-import { setupUnshallowDirectory } from './utils/filesystem.js';
+import { setupUnshallowDirectory, cleanupTestDirectory, cleanupTempFile } from './utils/filesystem.js';
 import { logger } from './utils/logging-callback.js';
 
 // Configure state
@@ -94,21 +94,25 @@ graph.addNode("load_test_file", loadTestFileNode)
 	.addConditionalEdges(
 		"analyze_test_errors",
 		(state) => {
-			const totalAttempts = state.file.totalAttempts || 0;
-			const trackedErrors = state.file.trackedErrors || {};
-			const hasExceededErrorAttempts = Object.values(trackedErrors).every(error => error && error.currentAttempts >= 5);
-			const hasHitTotalAttempts = totalAttempts >= 10;
+			// The analyze-test-errors node will now handle the retry limit logic
+			// This conditional edge uses the step decision from the node
 
-			if (hasHitTotalAttempts || hasExceededErrorAttempts) {
-				console.log(`[workflow] Ending due to exceeded attempts`);
-				return "end";
-			}
-
-			if (state.file.currentError) {
-				return "analyze_failure";
-			} else {
+			// If the step is run-test-passed, it means either:
+			// 1. All errors are fixed, or
+			// 2. We've hit the retry limits and the node marked it as "passed"
+			//    to exit the fix loop (but status will be 'failed')
+			if (state.file.currentStep === WorkflowStep.RUN_TEST_PASSED) {
 				return "validate_typescript";
 			}
+
+			// If we have an error to fix, continue with analyze-failure
+			if (state.file.currentError) {
+				return "analyze_failure";
+			}
+
+			// Fallback - should not happen
+			console.log("Unexpected state in analyze_test_errors condition");
+			return "validate_typescript";
 		},
 		{
 			analyze_failure: "analyze_failure",
@@ -162,7 +166,7 @@ export function createWorkflow(
 	context: EnrichedContext,
 	options: WorkflowOptions = {}
 ): { initialState: WorkflowState, execute: () => Promise<WorkflowState> } {
-	const maxRetries = options.maxRetries || 15;
+	const maxRetries = options.maxRetries || 20;
 
 	// Initial file state
 	const initialState: WorkflowState = {
@@ -217,7 +221,7 @@ export function createWorkflow(
 			// Execute the graph with the initial state
 			const result = await enzymeToRtlConverterGraph.invoke(initialState, {
 				callbacks: [langfuseCallbackHandler],
-				recursionLimit: 100
+				recursionLimit: 200
 			});
 			return result as WorkflowState;
 		} catch (error) {
@@ -248,13 +252,12 @@ export async function processSingleFile(
 	options: WorkflowOptions = {}
 ): Promise<WorkflowState> {
 	// Set up the .unshallow directory for logging and temporary files
-	const { unshallowDir, logsPath, attemptPath } = await setupUnshallowDirectory(testFilePath);
+	const { unshallowDir, testDir, logsPath, tempPath, attemptPath } = await setupUnshallowDirectory(testFilePath);
 
 	// Configure the logger with the logs file path
 	logger.setLogsPath(logsPath);
 
 	logger.info("workflow", `Starting migration for ${testFilePath}`);
-	logger.info("workflow", `Created unshallow directory at ${unshallowDir}`);
 
 	// Create the workflow with the unshallow directory paths
 	const workflow = createWorkflow(testFilePath, context, options);
@@ -263,7 +266,9 @@ export async function processSingleFile(
 	workflow.initialState.file = {
 		...workflow.initialState.file,
 		unshallowDir,
+		testDir,
 		logsPath,
+		tempPath,
 		attemptPath
 	};
 
@@ -271,7 +276,7 @@ export async function processSingleFile(
 		// Execute the workflow
 		const result = await workflow.execute();
 
-		// If the migration was successful, finalize it
+		// If the migration was successful, replace the original file and clean up
 		if (result.file.status === 'success' && result.file.rtlTest) {
 			logger.success("workflow", "Migration completed successfully");
 
@@ -280,12 +285,18 @@ export async function processSingleFile(
 				fs.writeFile(testFilePath, result.file.rtlTest!)
 			);
 
-			// Clean up the .unshallow directory
-			await import('./utils/filesystem.js').then(({ cleanupUnshallowDirectory }) =>
-				cleanupUnshallowDirectory(unshallowDir)
-			);
+			// Clean up the temporary files and test directory
+			await cleanupTempFile(tempPath);
+			await cleanupTestDirectory(testDir);
 		} else {
 			logger.info("workflow", `Migration completed with status: ${result.file.status}`);
+
+			// If the migration failed but we have a partial result, save it to the attempt file
+			if (result.file.rtlTest) {
+				await import('fs/promises').then(fs =>
+					fs.writeFile(attemptPath, result.file.rtlTest!)
+				);
+			}
 		}
 
 		return result;

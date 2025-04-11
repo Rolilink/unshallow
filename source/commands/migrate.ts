@@ -165,142 +165,22 @@ Add common usage patterns for your components here.
       }
     );
 
-    // Output the generated RTL test
-    if (result && result.file && result.file.rtlTest) {
-      // Generate output path (same name but with .rtl.tsx extension)
-      const ext = path.extname(inputPath);
-      const baseName = path.basename(inputPath, ext);
-      const dirName = path.dirname(inputPath);
-      const outputPath = path.join(dirName, `${baseName}.rtl${ext}`);
-
-      console.log(`Writing migrated test to: ${outputPath}`);
-      await fs.writeFile(outputPath, result.file.rtlTest, 'utf8');
-
-      // Write explanation to a markdown file if available
-      if (result.file.fixExplanation) {
-        const explanationPath = path.join(dirName, `${baseName}.explanation.md`);
-        console.log(`Writing explanation to: ${explanationPath}`);
-
-        // Format different fix histories if available
-        let fixHistoriesSections = '';
-
-        // Add fix plan section if available
-        if (result.file.fixPlan) {
-          fixHistoriesSections += `
-## Fix Plan
-**Generated on:** ${new Date(result.file.fixPlan.timestamp).toLocaleString()}
-
-### Error Analysis
-${result.file.fixPlan.explanation}
-
-### Planned Fixes
-${result.file.fixPlan.plan}
-
-### Mocking Strategy
-"No mocking information available."
-`;
-        }
-
-        // Format RTL fix history if available
-        if (result.file.rtlFixHistory && result.file.rtlFixHistory.length > 0) {
-          fixHistoriesSections += `
-## RTL Test Fix History
-${result.file.rtlFixHistory.map((attempt) => `
-### Attempt ${attempt.attempt} (${new Date(attempt.timestamp).toLocaleString()})
-
-**Test Code:**
-\`\`\`tsx
-${attempt.testContentBefore}
-\`\`\`
-
-**Error:**
-\`\`\`
-${attempt.error}
-\`\`\`
-
-**Explanation:**
-${attempt.explanation || "No explanation provided."}
-`).join('\n')}
-`;
-        }
-
-        // Format TS fix history if available
-        if (result.file.tsFixHistory && result.file.tsFixHistory.length > 0) {
-          fixHistoriesSections += `
-## TypeScript Fix History
-${result.file.tsFixHistory.map((attempt) => `
-### Attempt ${attempt.attempt} (${new Date(attempt.timestamp).toLocaleString()})
-
-**Test Code:**
-\`\`\`tsx
-${attempt.testContentBefore}
-\`\`\`
-
-**Error:**
-\`\`\`
-${attempt.error}
-\`\`\`
-
-**Explanation:**
-${attempt.explanation || "No explanation provided."}
-`).join('\n')}
-`;
-        }
-
-        // Format Lint fix history if available
-        if (result.file.lintFixHistory && result.file.lintFixHistory.length > 0) {
-          fixHistoriesSections += `
-## Lint Fix History
-${result.file.lintFixHistory.map((attempt) => `
-### Attempt ${attempt.attempt} (${new Date(attempt.timestamp).toLocaleString()})
-
-**Test Code:**
-\`\`\`tsx
-${attempt.testContentBefore}
-\`\`\`
-
-**Error:**
-\`\`\`
-${attempt.error}
-\`\`\`
-
-**Explanation:**
-${attempt.explanation || "No explanation provided."}
-`).join('\n')}
-`;
-        }
-
-        const explanationContent = `# Conversion Explanation for ${baseName}${ext}
-
-${result.file.fixExplanation}
-
-## Original Test
-\`\`\`tsx
-${result.file.content}
-\`\`\`
-
-## Converted Test
-\`\`\`tsx
-${result.file.rtlTest}
-\`\`\`
-${fixHistoriesSections}
-`;
-
-        await fs.writeFile(explanationPath, explanationContent, 'utf8');
-      }
-
+    // Check if the migration was successful or not
+    if (result && result.file) {
       if (result.file.status === 'success') {
         console.log('Migration completed successfully!');
+        console.log(`Original file at ${inputPath} has been replaced with the migrated RTL test.`);
       } else {
-        console.log('Migration completed with some issues. Check the output file.');
+        console.log(`Migration completed with status: ${result.file.status}`);
+
+        if (result.file.error) {
+          console.error('Error:', result.file.error.message);
+        }
       }
 
-      return 0;
+      return result.file.status === 'success' ? 0 : 1;
     } else {
-      console.error('Migration failed - no RTL test was generated');
-      if (result && result.file && result.file.error) {
-        console.error('Error:', result.file.error.message);
-      }
+      console.error('Migration failed - no result was returned');
       return 1;
     }
   } catch (error) {

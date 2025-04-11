@@ -3,6 +3,7 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAIStructured, lintFixResponseSchema } from '../utils/openai.js';
 import { fixLintPrompt } from '../prompts/fix-lint-prompt.js';
 import { PromptTemplate } from "@langchain/core/prompts";
+import { logger } from '../utils/logging-callback.js';
 
 // Create a PromptTemplate for the lint fix prompt
 export const fixLintPromptTemplate = PromptTemplate.fromTemplate(fixLintPrompt);
@@ -12,8 +13,13 @@ export const fixLintPromptTemplate = PromptTemplate.fromTemplate(fixLintPrompt);
  */
 export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'fix-lint-error';
 
-  console.log(`[fix-lint-error] Fixing ESLint error for ${file.path}`);
+  // Increment retry counter and set in logger
+  const nextLintAttempt = file.retries.lint + 1;
+  logger.setAttemptCount('lint-fix', nextLintAttempt);
+
+  await logger.logNodeStart(NODE_NAME, `Fixing lint errors (attempt #${nextLintAttempt}): ${file.path}`);
 
   try {
     if (!file.lintCheck) {
@@ -21,7 +27,7 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     }
 
     if (file.lintCheck.success) {
-      console.log(`[fix-lint-error] No lint errors detected, skipping fix`);
+      await logger.info(NODE_NAME, `No lint errors detected, skipping fix`);
       return {
         file: {
           ...file,
@@ -32,7 +38,10 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
 
     // Get the lint errors from the check result
     const lintErrors = file.lintCheck.output || file.lintCheck.errors?.join('\n') || 'Unknown lint errors';
-    console.log(`[fix-lint-error] Lint errors detected: ${lintErrors}`);
+    await logger.info(NODE_NAME, `Lint errors detected`);
+
+    // Log all errors being fixed
+    await logger.logErrors(NODE_NAME, lintErrors, "Lint errors being fixed");
 
     // Initialize the fix history if not present
     const lintFixHistory = file.lintFixHistory || [];
@@ -50,7 +59,7 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
       };
       lintFixHistory.push(attempt);
 
-      console.log(`[fix-lint-error] Added attempt ${file.retries.lint} to Lint fix history (${lintFixHistory.length} total attempts)`);
+      await logger.info(NODE_NAME, `Added attempt ${file.retries.lint} to Lint fix history (${lintFixHistory.length} total attempts)`);
     }
 
     // Format previous fix attempts for the prompt
@@ -71,7 +80,7 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
       userInstructions: file.context.extraContext || ''
     });
 
-    console.log(`[fix-lint-error] Calling model to fix lint errors`);
+    await logger.info(NODE_NAME, `Calling model to fix lint errors`);
 
     // Call OpenAI with the prompt and lint-specific schema
     const response = await callOpenAIStructured({
@@ -82,8 +91,14 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
       nodeName: 'fix_lint_error'
     });
 
-    // Log the full explanation
-    console.log(`[fix-lint-error] Explanation: ${response.explanation}`);
+    // Log the fix details
+    await logger.logFix(
+      NODE_NAME,
+      'Fix lint errors',
+      response.explanation,
+      response.testContent.trim(),
+      'lint-fix'
+    );
 
     // Mark that we've attempted to fix lint errors
     const updatedLintCheck = {
@@ -97,6 +112,8 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
       lint: file.retries.lint + 1
     };
 
+    await logger.success(NODE_NAME, `Applied lint fixes (attempt #${nextLintAttempt})`);
+
     return {
       file: {
         ...file,
@@ -109,7 +126,7 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
       }
     };
   } catch (err) {
-    console.error(`[fix-lint-error] Error: ${err instanceof Error ? err.message : String(err)}`);
+    await logger.error(NODE_NAME, `Error fixing lint errors`, err);
 
     return {
       file: {

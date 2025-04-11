@@ -6,6 +6,7 @@ import { callOpenAIStructured } from '../utils/openai.js';
 import { z } from 'zod';
 import { formatImports } from '../utils/format-utils.js';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
+import { logger } from '../utils/logging-callback.js';
 
 // Define the schema using Zod
 export const ExecuteRtlConversionOutputSchema = z.object({
@@ -23,13 +24,14 @@ export const executeRtlConversionTemplate = PromptTemplate.fromTemplate(executeR
  */
 export const executeRtlConversionNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'execute-rtl-conversion';
 
-  console.log(`[execute-rtl-conversion] Executing RTL conversion`);
+  await logger.logNodeStart(NODE_NAME, 'Executing RTL conversion');
 
   try {
     // Skip if the status is failed or no plan is available
     if (file.status === 'failed' || !file.fixPlan?.plan) {
-      console.log(`[execute-rtl-conversion] Skipping, status=${file.status}, plan=${!!file.fixPlan?.plan}`);
+      await logger.info(NODE_NAME, `Skipping, status=${file.status}, plan=${!!file.fixPlan?.plan}`);
       return {
         file: {
           ...file,
@@ -52,7 +54,7 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       supportingExamples: file.context.examples || ''
     });
 
-    console.log(`[execute-rtl-conversion] Calling OpenAI to execute conversion`);
+    await logger.info(NODE_NAME, 'Calling OpenAI to execute conversion');
 
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured({
@@ -63,7 +65,12 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       nodeName: 'execute_rtl_conversion'
     });
 
-    console.log(`[execute-rtl-conversion] Conversion complete`);
+    await logger.success(NODE_NAME, 'Conversion complete');
+
+    // Log the generated RTL test
+    if (response.rtl) {
+      await logger.logRtlTest(NODE_NAME, response.rtl);
+    }
 
     // Return the updated state with the generated RTL test
     return {
@@ -75,7 +82,7 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       },
     };
   } catch (error) {
-    console.error(`[execute-rtl-conversion] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, 'Error during RTL conversion', error);
 
     // If there's an error, mark the process as failed
     return {

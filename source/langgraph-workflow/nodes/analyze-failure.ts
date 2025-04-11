@@ -6,6 +6,7 @@ import { callOpenAIStructured } from '../utils/openai.js';
 import { AnalyzeFailureOutputSchema } from '../interfaces/index.js';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 import { formatImports } from '../utils/format-utils.js';
+import { logger } from '../utils/logging-callback.js';
 
 // Create the PromptTemplate for the analyze-failure prompt
 export const analyzeFailureTemplate = PromptTemplate.fromTemplate(analyzeFailurePrompt);
@@ -15,13 +16,16 @@ export const analyzeFailureTemplate = PromptTemplate.fromTemplate(analyzeFailure
  */
 export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'analyze-failure';
 
-  console.log(`[analyze-failure] Analyzing test failure to determine fix approach`);
+  // Get error name if available
+  const errorName = file.currentError ? file.currentError.testName : 'unknown';
+  await logger.logNodeStart(NODE_NAME, `Analyzing failure for: ${errorName}`);
 
   try {
     // Check if there's a current error to analyze
     if (!file.currentError) {
-      console.log(`[analyze-failure] No current error to analyze, skipping`);
+      await logger.info(NODE_NAME, `No current error to analyze, skipping`);
       return {
         file,
       };
@@ -29,6 +33,9 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
 
     // Get the current error
     const currentError = file.currentError;
+
+    // Log the full error details
+    await logger.logErrors(NODE_NAME, currentError, "Error details");
 
     // Format the prompt using the template
     const formattedPrompt = await analyzeFailureTemplate.format({
@@ -46,7 +53,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       migrationGuidelines: migrationGuidelines
     });
 
-    console.log(`[analyze-failure] Calling OpenAI to analyze test failure`);
+    await logger.info(NODE_NAME, `Calling OpenAI to analyze test failure`);
 
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured({
@@ -56,7 +63,10 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       nodeName: 'analyze_failure'
     });
 
-    console.log(`[analyze-failure] Analysis complete: ${response.fixIntent}`);
+    // Log the analysis results
+    await logger.info(NODE_NAME, `Generated fix intent: ${response.fixIntent}`);
+    await logger.info(NODE_NAME, `Explanation: ${response.explanation}`);
+    await logger.success(NODE_NAME, `Analysis complete`);
 
     // Return the updated state with the analysis
     return {
@@ -67,7 +77,7 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       },
     };
   } catch (error) {
-    console.error(`[analyze-failure] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error analyzing test failure`, error);
 
     // If there's an error, continue with the workflow
     return {

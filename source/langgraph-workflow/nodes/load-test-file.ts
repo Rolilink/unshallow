@@ -10,20 +10,16 @@ export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult
   const { file } = state;
   const NODE_NAME = 'load-test-file';
 
-  logger.info(NODE_NAME, `Processing: ${file.path}`);
+  await logger.logNodeStart(NODE_NAME, `Loading test file: ${file.path}`);
 
   try {
     // Read the test file
     const content = await fs.readFile(file.path, 'utf8');
 
-    // If we have an attempt path, write the content there
-    if (file.attemptPath) {
-      await fs.writeFile(file.attemptPath, content, 'utf8');
-      logger.info(NODE_NAME, `Wrote initial content to attempt file: ${file.attemptPath}`);
-    }
+    // Log the entire test file content
+    await logger.logTestFile(NODE_NAME, file.path, content);
 
-    // Log without showing the full content
-    logger.info(NODE_NAME, `File loaded successfully (${content.length} characters)`);
+    await logger.success(NODE_NAME, `Test file loaded successfully`);
 
     return {
       file: {
@@ -34,7 +30,7 @@ export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult
       },
     };
   } catch (error) {
-    logger.error(NODE_NAME, `Error loading file: ${file.path}`, error);
+    await logger.error(NODE_NAME, `Failed to load test file: ${error instanceof Error ? error.message : String(error)}`, error);
 
     return {
       file: {

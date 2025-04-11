@@ -8,6 +8,7 @@ import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 import path from 'path';
 import * as fs from 'fs/promises';
 import { formatImports } from '../utils/format-utils.js';
+import { logger } from '../utils/logging-callback.js';
 
 // Create the PromptTemplate for the execute-rtl-fix prompt
 export const executeRtlFixTemplate = PromptTemplate.fromTemplate(executeRtlFixPrompt);
@@ -17,13 +18,19 @@ export const executeRtlFixTemplate = PromptTemplate.fromTemplate(executeRtlFixPr
  */
 export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'execute-rtl-fix';
 
-  console.log(`[execute-rtl-fix] Executing fix for test failure`);
+  // Use the test-fix counter which is set by analyze-test-errors
+  const attemptNumber = logger.getAttemptCount('test-fix');
+
+  // Get error name if available
+  const errorName = file.currentError ? file.currentError.testName : 'unknown';
+  await logger.logNodeStart(NODE_NAME, `Executing fix (attempt #${attemptNumber} for error ${errorName})`);
 
   try {
     // Check if there's a current error to fix
     if (!file.currentError) {
-      console.log(`[execute-rtl-fix] No current error to fix, skipping`);
+      await logger.info(NODE_NAME, `No current error to fix, skipping`);
       return {
         file,
       };
@@ -31,12 +38,15 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
 
     // Ensure we have fix intent
     if (!file.fixIntent) {
-      console.log(`[execute-rtl-fix] No fix intent available, using default`);
+      await logger.info(NODE_NAME, `No fix intent available, using default`);
       file.fixIntent = 'Fix the failing test';
     }
 
     // Get the current error
     const currentError = file.currentError;
+
+    // Log the fix intent
+    await logger.info(NODE_NAME, `Fix intent: ${file.fixIntent}`);
 
     // Format the prompt using the template
     const formattedPrompt = await executeRtlFixTemplate.format({
@@ -55,7 +65,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       migrationGuidelines: migrationGuidelines
     });
 
-    console.log(`[execute-rtl-fix] Calling OpenAI to execute fix`);
+    await logger.info(NODE_NAME, `Calling OpenAI to execute fix`);
 
     // Call OpenAI with the prompt
     const response = await callOpenAIStructured({
@@ -66,14 +76,25 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       nodeName: 'execute_rtl_fix'
     });
 
-    console.log(`[execute-rtl-fix] Fix executed, updated test file`);
+    // Log the fix details
+    await logger.logFix(
+      NODE_NAME,
+      file.fixIntent || 'Fix test error',
+      response.fixExplanation,
+      response.updatedTestFile,
+      'test-fix'
+    );
 
-    // Create temporary file for testing
-    const tempDir = path.dirname(file.path);
-    const tempFile = file.tempPath || path.join(tempDir, `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`);
+    // Use the temp file provided by the workflow state
+    const tempFile = file.tempPath || path.join(
+      path.dirname(file.path),
+      `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`
+    );
 
     // Write the updated test to the temp file
     await fs.writeFile(tempFile, response.updatedTestFile);
+
+    await logger.success(NODE_NAME, `Fix executed, ready to run updated test`);
 
     // Return the updated state with the fixed test
     return {
@@ -86,7 +107,7 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       },
     };
   } catch (error) {
-    console.error(`[execute-rtl-fix] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error executing RTL fix`, error);
 
     // If there's an error, continue with the workflow
     return {

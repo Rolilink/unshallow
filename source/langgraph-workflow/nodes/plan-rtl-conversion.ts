@@ -5,6 +5,7 @@ import { callOpenAIStructured } from '../utils/openai.js';
 import { planRtlConversionPrompt } from '../prompts/plan-rtl-conversion-prompt.js';
 import { z } from 'zod';
 import { formatImports } from '../utils/format-utils.js';
+import { logger } from '../utils/logging-callback.js';
 
 // Define schema for plan RTL conversion output
 export const PlanRtlConversionOutputSchema = z.object({
@@ -23,8 +24,9 @@ export const planRtlConversionTemplate = PromptTemplate.fromTemplate(planRtlConv
  */
 export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'plan-rtl-conversion';
 
-  console.log(`[plan-rtl-conversion] Planning RTL conversion`);
+  await logger.logNodeStart(NODE_NAME, `Planning RTL conversion`);
 
   try {
     // Format the prompt using the template without code block formatting
@@ -37,7 +39,7 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
       supportingExamples: file.context.examples ? JSON.stringify(file.context.examples) : ''
     });
 
-    console.log(`[plan-rtl-conversion] Calling OpenAI to plan conversion`);
+    await logger.info(NODE_NAME, `Calling OpenAI to plan conversion`);
 
     // Call OpenAI with the prompt and RTL planning schema
     const response = await callOpenAIStructured({
@@ -48,8 +50,9 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
       nodeName: 'plan_rtl_conversion'
     });
 
-    // Log the planner response
-    console.log(`[plan-rtl-conversion] Planned conversion with ${response.plan.split('\n').length} steps`);
+    // Log the plan and explanation
+    await logger.logPlan(NODE_NAME, response.plan, response.explanation);
+    await logger.success(NODE_NAME, `Plan generated with ${response.plan.split('\n').length} steps`);
 
     // Return the updated state with the conversion plan
     return {
@@ -64,7 +67,7 @@ export const planRtlConversionNode = async (state: WorkflowState): Promise<NodeR
       },
     };
   } catch (error) {
-    console.error(`[plan-rtl-conversion] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error planning RTL conversion`, error);
 
     // If there's an error, mark the process as failed
     return {

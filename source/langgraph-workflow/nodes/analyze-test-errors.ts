@@ -1,22 +1,49 @@
 import { WorkflowState, WorkflowStep, TrackedError } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
+import { logger } from '../utils/logging-callback.js';
+
+// Fixed max attempts per error before we give up
+const MAX_ERROR_ATTEMPTS = 5;
 
 /**
  * Analyzes errors and selects the next one to fix
  */
 export const analyzeTestErrorsNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'analyze-test-errors';
 
-  console.log(`[analyze-test-errors] Analyzing tracked errors to select next one to fix`);
+  // Get max retries from file state, using the option set during workflow creation
+  const maxRetries = file.maxRetries || 20;
+
+  await logger.logNodeStart(NODE_NAME, "Analyzing test errors");
 
   try {
     // Get the tracked errors or initialize
     const trackedErrors = file.trackedErrors || {};
     const totalAttempts = file.totalAttempts || 0;
 
+    // Check if we've hit the maximum total attempts
+    if (totalAttempts >= maxRetries) {
+      await logger.info(NODE_NAME, `Hit maximum total attempts limit (${maxRetries}). Stopping fix loop.`);
+
+      return {
+        file: {
+          ...file,
+          currentError: null,
+          trackedErrors,
+          totalAttempts,
+          currentStep: WorkflowStep.RUN_TEST_PASSED, // Mark as passed to exit the fix loop
+          status: 'failed', // But still mark the overall status as failed
+        },
+      };
+    }
+
+    // Log all tracked errors
+    await logger.logErrors(NODE_NAME, trackedErrors, "All tracked errors");
+
     // Check if any errors exist
     if (Object.keys(trackedErrors).length === 0) {
-      console.log(`[analyze-test-errors] No tracked errors found, all tests passed`);
+      await logger.info(NODE_NAME, `No tracked errors found, all tests passed`);
       return {
         file: {
           ...file,
@@ -31,7 +58,7 @@ export const analyzeTestErrorsNode = async (state: WorkflowState): Promise<NodeR
     // 1. Regressed errors (previously fixed but broken again)
     // 2. New errors (never seen before)
     // 3. Active errors (existing errors we're still working on)
-    // Skip any error with 5 or more attempts
+    // Skip any error with MAX_ERROR_ATTEMPTS or more attempts
 
     const errorPriorityOrder: ['regressed', 'new', 'active'] = ['regressed', 'new', 'active'];
 
@@ -45,7 +72,7 @@ export const analyzeTestErrorsNode = async (state: WorkflowState): Promise<NodeR
 
     // Safely add errors to the appropriate status group
     Object.values(trackedErrors).forEach(error => {
-      if (error && error.currentAttempts < 5 && error.status) {
+      if (error && error.currentAttempts < MAX_ERROR_ATTEMPTS && error.status) {
         const status = error.status as keyof typeof errorsByStatus;
         if (errorsByStatus[status]) {
           errorsByStatus[status].push(error);
@@ -68,32 +95,55 @@ export const analyzeTestErrorsNode = async (state: WorkflowState): Promise<NodeR
       }
     }
 
+    // Check if all errors have either been fixed or exceeded the attempt limit
+    const unfixedErrors = Object.values(trackedErrors).filter(
+      error => error && error.status !== 'fixed'
+    );
+
+    const fixableErrors = unfixedErrors.filter(
+      error => error && error.currentAttempts < MAX_ERROR_ATTEMPTS
+    );
+
     // If we found an error to fix, update its attempt count
-    if (selectedError) {
+    if (selectedError && fixableErrors.length > 0) {
+      // We increment the attempt counter here, not in the test or fix nodes
+      const nextAttemptNumber = selectedError.currentAttempts + 1;
+
       trackedErrors[selectedError.fingerprint] = {
         ...selectedError,
-        currentAttempts: selectedError.currentAttempts + 1,
+        currentAttempts: nextAttemptNumber,
       };
 
-      console.log(`[analyze-test-errors] Selected error: ${selectedError.testName} (${selectedError.status}) - Attempt ${selectedError.currentAttempts + 1}`);
+      // Reset the logger's internal counter to match our tracked count
+      // This ensures the logger and our state stay in sync
+      logger.setAttemptCount('test-fix', nextAttemptNumber);
+
+      await logger.info(NODE_NAME, `Selected error for fixing: ${selectedError.testName} (${selectedError.status}) - Attempt ${nextAttemptNumber} of ${MAX_ERROR_ATTEMPTS}`);
+      await logger.info(NODE_NAME, `Total fix attempts: ${totalAttempts + 1} of ${maxRetries}`);
+
+      // Log the full details of the selected error
+      await logger.logErrors(NODE_NAME, selectedError, "Selected error (full details)");
     } else {
-      // Check if we exhausted all retry attempts
-      const hasUnfixedErrors = Object.values(trackedErrors).some(error => error && error.status !== 'fixed');
-      const hasExceededAttempts = Object.values(trackedErrors).every(error => error && error.currentAttempts >= 5);
-
-      if (hasUnfixedErrors && hasExceededAttempts) {
-        console.log(`[analyze-test-errors] All errors have exceeded retry limits`);
+      // No more errors to fix
+      if (unfixedErrors.length > 0) {
+        await logger.info(NODE_NAME, `All unfixed errors (${unfixedErrors.length}) have exceeded retry limits`);
       } else {
-        console.log(`[analyze-test-errors] No errors to fix, all are either fixed or skipped`);
+        await logger.info(NODE_NAME, `No errors to fix, all are either fixed or skipped`);
       }
-    }
 
-    // Check if we've hit the total attempts limit
-    const hasHitTotalAttempts = totalAttempts >= 10;
-    if (hasHitTotalAttempts) {
-      console.log(`[analyze-test-errors] Hit total attempts limit of 10`);
       selectedError = null;
     }
+
+    // Log completion status
+    const completionStatus = selectedError ? "Selected error for fixing" : "No errors to fix";
+    await logger.logNodeComplete(NODE_NAME, completionStatus, `Total attempts: ${totalAttempts + 1} of ${maxRetries}`);
+
+    // Determine the next step and the final status
+    const nextStep = selectedError ? WorkflowStep.RUN_TEST_FAILED : WorkflowStep.RUN_TEST_PASSED;
+
+    // If we have no selected error but there are unfixed errors, mark as failed
+    const finalStatus =
+      (!selectedError && unfixedErrors.length > 0) ? 'failed' : file.status;
 
     // Update the workflow state with the selected error and updated tracked errors
     return {
@@ -102,11 +152,12 @@ export const analyzeTestErrorsNode = async (state: WorkflowState): Promise<NodeR
         currentError: selectedError,
         trackedErrors,
         totalAttempts: totalAttempts + 1,
-        currentStep: selectedError ? WorkflowStep.RUN_TEST_FAILED : WorkflowStep.RUN_TEST_PASSED,
+        currentStep: nextStep,
+        status: finalStatus,
       },
     };
   } catch (error) {
-    console.error(`[analyze-test-errors] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error analyzing test errors`, error);
 
     // If there's an error, continue with the workflow
     return {

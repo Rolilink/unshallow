@@ -21,11 +21,17 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
   const { file } = state;
   const NODE_NAME = 'run-test';
 
-  logger.info(NODE_NAME, `Testing: ${file.path}`);
+  // If we're in the fix loop, use the test-fix counter which is managed by analyze-test-errors
+  // Otherwise, use the regular test counter
+  const attemptNumber = file.currentError
+    ? logger.getAttemptCount('test-fix')
+    : logger.incrementAttemptCount('test');
+
+  await logger.logNodeStart(NODE_NAME, `Running test (attempt #${attemptNumber}): ${file.path}`);
 
   // Skip if configured to skip tests
   if (file.skipTest) {
-    logger.info(NODE_NAME, `Skipped (skipTest enabled)`);
+    await logger.info(NODE_NAME, `Skipped (skipTest enabled)`);
     return {
       file: {
         ...file,
@@ -39,19 +45,15 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
   }
 
   try {
-    // Use the attempt file in the .unshallow directory if available
-    const testFile = file.attemptPath || file.tempPath || path.join(
+    // Use the temp file provided by the workflow state
+    // If workflow fails later, results will be copied to the attemptPath
+    const testFile = file.tempPath || path.join(
       path.dirname(file.path),
       `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`
     );
 
-    // Write the RTL test to the test file if attemptPath wasn't already set
-    if (!file.attemptPath) {
-      await fs.writeFile(testFile, file.rtlTest || '');
-    } else {
-      // Otherwise update the attempt file with the current RTL test
-      await fs.writeFile(file.attemptPath, file.rtlTest || '');
-    }
+    // Write the RTL test to the test file
+    await fs.writeFile(testFile, file.rtlTest || '');
 
     // Update the file state with the test file path
     const updatedFile = {
@@ -63,7 +65,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
     const testCmd = file.commands.test || 'yarn test';
     const fullCommand = `${testCmd} ${testFile}`;
 
-    logger.info(NODE_NAME, `Executing: ${fullCommand}`);
+    await logger.info(NODE_NAME, `Executing: ${fullCommand}`);
 
     let exitCode = 0;
     let stdout = '';
@@ -79,29 +81,22 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
       stderr = execError.stderr || '';
       exitCode = execError.code || 1;
 
-      logger.info(NODE_NAME, `Command failed with exit code: ${exitCode}`);
-
-      // Log a sample of the errors for better debugging
-      if (stderr) {
-        logger.error(NODE_NAME, 'Test execution failed, error output:');
-        const errorLines = stderr.split('\n').filter(line => line.includes('error'));
-        if (errorLines.length > 0) {
-          const errorSample = errorLines.slice(0, 3).join('\n');
-          logger.error(NODE_NAME, `Error sample:\n${errorSample}${errorLines.length > 3 ? '\n...' : ''}`);
-        }
-      }
+      await logger.info(NODE_NAME, `Command failed with exit code: ${exitCode}`);
     }
 
     // Clean up the ANSI codes for better log readability
     stdout = stripAnsiCodes(stdout);
     stderr = stripAnsiCodes(stderr);
 
-    // Log the output for diagnosis
-    const summaryLines = 10;
-    if (stdout) {
-      const stdoutSummary = stdout.split('\n').slice(0, summaryLines).join('\n');
-      logger.info(NODE_NAME, `STDOUT summary (${stdout.length} chars):\n${stdoutSummary}${stdout.split('\n').length > summaryLines ? '\n...' : ''}`);
-    }
+    // Log the complete command results
+    await logger.logCommand(
+      NODE_NAME,
+      fullCommand,
+      stdout,
+      stderr,
+      exitCode,
+      'test'
+    );
 
     // Determine test result
     const testResult = {
@@ -112,7 +107,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
 
     // Return the updated state with the test result
     if (testResult.success) {
-      logger.success(NODE_NAME, 'Test passed successfully');
+      await logger.success(NODE_NAME, `Test passed successfully (attempt #${attemptNumber})`);
       return {
         file: {
           ...updatedFile,
@@ -122,7 +117,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
         },
       };
     } else {
-      logger.error(NODE_NAME, 'Test failed');
+      await logger.error(NODE_NAME, `Test failed (attempt #${attemptNumber})`);
       return {
         file: {
           ...updatedFile,
@@ -132,7 +127,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
       };
     }
   } catch (error) {
-    logger.error(NODE_NAME, 'Error running test', error);
+    await logger.error(NODE_NAME, 'Error running test', error);
 
     return {
       file: {

@@ -211,6 +211,7 @@ export interface FileState {
 
   // Properties for the unshallow directory
   unshallowDir?: string;
+  testDir?: string;  // New property for the test-specific directory
   logsPath?: string;
   attemptPath?: string;
 }

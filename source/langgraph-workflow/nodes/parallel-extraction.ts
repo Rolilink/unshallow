@@ -10,6 +10,7 @@ import {
   TrackedError
 } from '../interfaces/index.js';
 import crypto from 'crypto';
+import { logger } from '../utils/logging-callback.js';
 
 // Create a hash for the error fingerprint
 function createFingerprint(testName: string, normalized: string): string {
@@ -26,13 +27,14 @@ export const extractJestErrorsTemplate = PromptTemplate.fromTemplate(extractJest
  */
 export const parallelExtractionNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'parallel-extraction';
 
-  console.log(`[parallel-extraction] Starting parallel extraction of accessibility snapshot and Jest errors`);
+  await logger.logNodeStart(NODE_NAME, `Extracting accessibility data and errors from test output`);
 
   try {
     // Check if there's a test result available
     if (!file.testResult) {
-      console.log(`[parallel-extraction] No test result available, skipping`);
+      await logger.info(NODE_NAME, `No test result available, skipping`);
       return {
         file: {
           ...file,
@@ -52,7 +54,7 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
       extractJestErrorsTemplate.format({ jestOutput })
     ]);
 
-    console.log(`[parallel-extraction] Calling OpenAI to extract information in parallel`);
+    await logger.info(NODE_NAME, `Calling OpenAI to extract information in parallel`);
 
     // Prepare API calls
     const a11yCall = callOpenAIStructured({
@@ -71,8 +73,23 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
     // Execute both API calls in parallel
     const [a11yResponse, errorsResponse] = await Promise.all([a11yCall, errorsCall]);
 
-    console.log(`[parallel-extraction] Extracted accessibility data of length: ${a11yResponse.accessibilityDump.length}`);
-    console.log(`[parallel-extraction] Extracted ${errorsResponse.testErrors.length} test errors`);
+    // Log the extracted data
+    if (a11yResponse.accessibilityDump || a11yResponse.domTree) {
+      await logger.logAccessibilityData(
+        NODE_NAME,
+        a11yResponse.accessibilityDump || '',
+        a11yResponse.domTree || ''
+      );
+      await logger.info(NODE_NAME, `Extracted accessibility data of length: ${a11yResponse.accessibilityDump.length}`);
+    }
+
+    // Log extracted test errors
+    if (errorsResponse.testErrors.length > 0) {
+      await logger.logErrors(NODE_NAME, errorsResponse.testErrors, "Extracted test errors");
+      await logger.info(NODE_NAME, `Extracted ${errorsResponse.testErrors.length} test errors`);
+    } else {
+      await logger.info(NODE_NAME, `No test errors found`);
+    }
 
     // Process extracted errors
     let updatedTrackedErrors = file.trackedErrors || {};
@@ -83,7 +100,7 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
       updatedTrackedErrors = { ...existingTrackedErrors };
 
       // Process extracted errors and update tracked errors
-      errorsResponse.testErrors.forEach(error => {
+      for (const error of errorsResponse.testErrors) {
         // Create a fingerprint for the error
         const fingerprint = createFingerprint(error.testName, error.normalized);
 
@@ -97,8 +114,10 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
 
             if (existingError.status === 'fixed') {
               newStatus = 'regressed';
+              await logger.info(NODE_NAME, `Error '${error.testName}' has regressed`);
             } else {
               newStatus = 'active';
+              await logger.info(NODE_NAME, `Error '${error.testName}' is still active`);
             }
 
             // Update the tracked error
@@ -111,6 +130,7 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
           }
         } else {
           // This is a new error
+          await logger.info(NODE_NAME, `New error detected: '${error.testName}'`);
           updatedTrackedErrors[fingerprint] = {
             fingerprint,
             testName: error.testName,
@@ -120,38 +140,47 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
             status: 'new',
           };
         }
-      });
+      }
 
       // Update statuses for errors that might be fixed now
-      Object.keys(updatedTrackedErrors).forEach(fingerprint => {
+      for (const fingerprint of Object.keys(updatedTrackedErrors)) {
         const trackedError = updatedTrackedErrors[fingerprint];
 
         if (trackedError &&
           !errorsResponse.testErrors.some(error => createFingerprint(error.testName, error.normalized) === fingerprint) &&
           trackedError.status !== 'fixed'
         ) {
+          await logger.info(NODE_NAME, `Error '${trackedError.testName}' has been fixed`);
           updatedTrackedErrors[fingerprint] = {
             ...trackedError,
             status: 'fixed',
           };
         }
-      });
+      }
     } else if (file.testResult.success) {
       // If test was successful, mark all errors as fixed
-      updatedTrackedErrors = Object.keys(updatedTrackedErrors).reduce((acc, fingerprint) => {
+      await logger.info(NODE_NAME, `Test passed, marking all errors as fixed`);
+
+      const fixedErrors: Record<string, TrackedError> = {};
+
+      for (const fingerprint of Object.keys(updatedTrackedErrors)) {
         const trackedError = updatedTrackedErrors[fingerprint];
         if (trackedError && trackedError.status !== 'fixed') {
-          acc[fingerprint] = {
+          await logger.info(NODE_NAME, `Marking error '${trackedError.testName}' as fixed`);
+          fixedErrors[fingerprint] = {
             ...trackedError,
             status: 'fixed',
           };
         } else if (trackedError) {
           // Only add if it's not undefined
-          acc[fingerprint] = trackedError;
+          fixedErrors[fingerprint] = trackedError;
         }
-        return acc;
-      }, {} as Record<string, TrackedError>);
+      }
+
+      updatedTrackedErrors = fixedErrors;
     }
+
+    await logger.success(NODE_NAME, `Extraction complete`);
 
     // Return the updated state with all extracted information
     return {
@@ -165,7 +194,7 @@ export const parallelExtractionNode = async (state: WorkflowState): Promise<Node
       },
     };
   } catch (error) {
-    console.error(`[parallel-extraction] Error: ${error instanceof Error ? error.message : String(error)}`);
+    await logger.error(NODE_NAME, `Error during parallel extraction`, error);
 
     // If there's an error, preserve existing values
     return {

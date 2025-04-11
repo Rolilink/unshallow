@@ -3,6 +3,7 @@ import { NodeResult } from '../interfaces/node.js';
 import { callOpenAIStructured, tsFixResponseSchema } from '../utils/openai.js';
 import { fixTsPrompt } from '../prompts/fix-ts-prompt.js';
 import { PromptTemplate } from "@langchain/core/prompts";
+import { logger } from '../utils/logging-callback.js';
 
 // Create a PromptTemplate for the TS fix prompt
 export const fixTsPromptTemplate = PromptTemplate.fromTemplate(fixTsPrompt);
@@ -12,8 +13,9 @@ export const fixTsPromptTemplate = PromptTemplate.fromTemplate(fixTsPrompt);
  */
 export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'fix-ts-error';
 
-  console.log(`[fix-ts-error] Fixing TypeScript error for ${file.path}`);
+  await logger.logNodeStart(NODE_NAME, `Fixing TypeScript error for ${file.path}`);
 
   try {
     if (!file.tsCheck) {
@@ -21,7 +23,7 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
     }
 
     if (file.tsCheck.success) {
-      console.log(`[fix-ts-error] No TypeScript errors detected, skipping fix`);
+      await logger.info(NODE_NAME, 'No TypeScript errors detected, skipping fix');
       return {
         file: {
           ...file,
@@ -32,10 +34,14 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
 
     // Get the TypeScript errors from the check result
     const tsErrors = file.tsCheck.errors?.join('\n') || 'Unknown TypeScript errors';
-    console.log(`[fix-ts-error] TypeScript errors detected: ${tsErrors}`);
+    await logger.info(NODE_NAME, `TypeScript errors detected: ${tsErrors}`);
 
     // Initialize the fix history if not present
     const tsFixHistory = file.tsFixHistory || [];
+
+    // Increment the attempt count for TS before adding to history
+    const nextTsAttempt = file.retries.ts + 1;
+    logger.setAttemptCount('ts-fix', nextTsAttempt);
 
     // If we have a current test and it's not the first attempt, add it to history
     if (file.rtlTest && file.retries.ts > 0) {
@@ -52,7 +58,7 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
       // Add the current attempt to history
       tsFixHistory.push(attempt);
 
-      console.log(`[fix-ts-error] Added attempt ${file.retries.ts} to TS fix history (${tsFixHistory.length} total attempts)`);
+      await logger.info(NODE_NAME, `Added attempt ${file.retries.ts} to TS fix history (${tsFixHistory.length} total attempts)`);
     }
 
     // Format previous fix attempts for the prompt
@@ -75,7 +81,7 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
       userInstructions: file.context.extraContext || ''
     });
 
-    console.log(`[fix-ts-error] Calling model to fix TypeScript errors`);
+    await logger.info(NODE_NAME, 'Calling model to fix TypeScript errors');
 
     // Call OpenAI with the prompt and TS-specific schema
     const response = await callOpenAIStructured({
@@ -86,14 +92,22 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
       nodeName: 'fix_ts_error'
     });
 
-    // Log the full explanation
-    console.log(`[fix-ts-error] Explanation: ${response.explanation}`);
+    // Log the fix details
+    await logger.logFix(
+      NODE_NAME,
+      'Fix TypeScript errors',
+      response.explanation,
+      response.testContent.trim(),
+      'ts-fix'
+    );
 
     // Increment the TS retry counter
     const updatedRetries = {
       ...file.retries,
       ts: file.retries.ts + 1
     };
+
+    await logger.success(NODE_NAME, 'Applied TypeScript fixes');
 
     return {
       file: {
@@ -106,7 +120,7 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
       }
     };
   } catch (err) {
-    console.error(`[fix-ts-error] Error: ${err instanceof Error ? err.message : String(err)}`);
+    await logger.error(NODE_NAME, 'Error fixing TypeScript errors', err);
 
     return {
       file: {

@@ -9,22 +9,32 @@ import * as path from 'path';
  */
 export async function setupUnshallowDirectory(testFilePath: string): Promise<{
   unshallowDir: string;
+  testDir: string;
   logsPath: string;
+  tempPath: string;
   attemptPath: string;
 }> {
-  const testDir = path.dirname(testFilePath);
+  const folderDir = path.dirname(testFilePath);
   const testBaseName = path.basename(testFilePath, path.extname(testFilePath));
   const testExt = path.extname(testFilePath);
 
-  // Create .unshallow directory path next to the test file
-  const unshallowDir = path.join(testDir, '.unshallow');
+  // Create temporary file path in the same directory as the test
+  const tempPath = path.join(folderDir, `${testBaseName}.temp${testExt}`);
+
+  // Create .unshallow directory path in the test's folder
+  const unshallowDir = path.join(folderDir, '.unshallow');
+
+  // Create a subfolder for this specific test (without extension)
+  const testDir = path.join(unshallowDir, testBaseName);
 
   // Create paths for logs and attempt file
-  const logsPath = path.join(unshallowDir, 'logs.txt');
-  const attemptPath = path.join(unshallowDir, `${testBaseName}.attempt${testExt}`);
+  const logsPath = path.join(testDir, 'logs.txt');
+  // Save attempt path for failed cases in the unshallow directory
+  const attemptPath = path.join(testDir, `${testBaseName}.attempt${testExt}`);
 
-  // Ensure the directory exists
+  // Ensure the directories exist
   await fs.mkdir(unshallowDir, { recursive: true });
+  await fs.mkdir(testDir, { recursive: true });
 
   // Initialize logs file if it doesn't exist
   if (!fsSync.existsSync(logsPath)) {
@@ -34,7 +44,9 @@ export async function setupUnshallowDirectory(testFilePath: string): Promise<{
 
   return {
     unshallowDir,
+    testDir,
     logsPath,
+    tempPath,
     attemptPath
   };
 }
@@ -69,7 +81,19 @@ export async function appendLog(
 }
 
 /**
- * Cleans up the .unshallow directory
+ * Cleans up the test directory inside .unshallow
+ * @param testDir Path to the test directory
+ */
+export async function cleanupTestDirectory(testDir: string): Promise<void> {
+  try {
+    await fs.rm(testDir, { recursive: true, force: true });
+  } catch (error) {
+    console.error(`Error cleaning up test directory: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Cleans up the entire .unshallow directory
  * @param unshallowDir Path to the .unshallow directory
  */
 export async function cleanupUnshallowDirectory(unshallowDir: string): Promise<void> {
@@ -81,25 +105,42 @@ export async function cleanupUnshallowDirectory(unshallowDir: string): Promise<v
 }
 
 /**
+ * Cleans up the temporary file
+ * @param tempPath Path to the temporary file
+ */
+export async function cleanupTempFile(tempPath: string): Promise<void> {
+  try {
+    if (fsSync.existsSync(tempPath)) {
+      await fs.unlink(tempPath);
+    }
+  } catch (error) {
+    console.error(`Error cleaning up temporary file: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
  * Finalizes a successful migration by replacing the original file and cleaning up
  * @param originalFilePath Path to the original test file
- * @param attemptPath Path to the attempt file with the successful migration
- * @param unshallowDir Path to the .unshallow directory
+ * @param tempPath Path to the temporary file with the successful migration
+ * @param testDir Path to the test's directory in .unshallow
  */
 export async function finalizeMigration(
   originalFilePath: string,
-  attemptPath: string,
-  unshallowDir: string
+  tempPath: string,
+  testDir: string
 ): Promise<void> {
   try {
-    // Read the content of the attempt file
-    const content = await fs.readFile(attemptPath, 'utf8');
+    // Read the content of the temporary file
+    const content = await fs.readFile(tempPath, 'utf8');
 
-    // Replace the original file with the content of the attempt file
+    // Replace the original file with the content of the temporary file
     await fs.writeFile(originalFilePath, content, 'utf8');
 
-    // Clean up the .unshallow directory
-    await cleanupUnshallowDirectory(unshallowDir);
+    // Clean up the temporary file
+    await cleanupTempFile(tempPath);
+
+    // Clean up just this test's directory
+    await cleanupTestDirectory(testDir);
   } catch (error) {
     console.error(`Error finalizing migration: ${error instanceof Error ? error.message : String(error)}`);
   }
