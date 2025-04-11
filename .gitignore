@@ -5,7 +5,5 @@ dist
 
 .env
 
-# langsmith.ts is ignored until we set env variables
-langsmith.ts
 
 .DS_Store
