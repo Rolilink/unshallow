@@ -1,20 +1,29 @@
 import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
 import * as fs from 'fs/promises';
+import { logger } from '../utils/logging-callback.js';
 
 /**
  * Loads the test file from disk
  */
 export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
-  console.log(`[load-test-file] Processing: ${file.path}`);
+  const NODE_NAME = 'load-test-file';
+
+  logger.info(NODE_NAME, `Processing: ${file.path}`);
 
   try {
     // Read the test file
     const content = await fs.readFile(file.path, 'utf8');
 
+    // If we have an attempt path, write the content there
+    if (file.attemptPath) {
+      await fs.writeFile(file.attemptPath, content, 'utf8');
+      logger.info(NODE_NAME, `Wrote initial content to attempt file: ${file.attemptPath}`);
+    }
+
     // Log without showing the full content
-    console.log(`[load-test-file] File loaded successfully (${content.length} characters)`);
+    logger.info(NODE_NAME, `File loaded successfully (${content.length} characters)`);
 
     return {
       file: {
@@ -25,7 +34,8 @@ export const loadTestFileNode = async (state: WorkflowState): Promise<NodeResult
       },
     };
   } catch (error) {
-    console.error(`[load-test-file] Error: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(NODE_NAME, `Error loading file: ${file.path}`, error);
+
     return {
       file: {
         ...file,

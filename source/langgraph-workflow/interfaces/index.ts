@@ -208,6 +208,11 @@ export interface FileState {
   reasoningPlanning?: boolean;
   reasoningExecution?: boolean;
   reasoningReflection?: boolean;
+
+  // Properties for the unshallow directory
+  unshallowDir?: string;
+  logsPath?: string;
+  attemptPath?: string;
 }
 
 /**

@@ -4,8 +4,8 @@ import {handleMigrateCommand} from './commands/migrate.js';
 import {handleContextEnricherCommand} from './commands/context-enricher.js';
 import {handleSetApiKeyCommand, handleGetApiKeyCommand} from './commands/config.js';
 import {handleTestLintCommand} from './commands/test-lint.js';
-import {handleExportTracesCommand} from './commands/export-traces.js';
 import {handleGetContextPathCommand} from './commands/get-context-path.js';
+import {handleSetLangfuseConfigCommand} from './commands/set-langfuse-config.js';
 
 // Create the main program
 const program = new Command()
@@ -18,22 +18,34 @@ program
 	.command('config')
 	.description('Configuration management');
 
-// Add set-api-key subcommand
-program
-	.command('config:set-api-key')
-	.description('Set the OpenAI API key')
-	.argument('<key>', 'Your OpenAI API key')
-	.action((key) => {
-		const exitCode = handleSetApiKeyCommand(key);
-		process.exit(exitCode);
-	});
-
-// Add get-api-key subcommand
+// Add get API key command
 program
 	.command('config:get-api-key')
 	.description('View the current OpenAI API key (masked)')
 	.action(() => {
 		const exitCode = handleGetApiKeyCommand();
+		process.exit(exitCode);
+	});
+
+// Add set API key command
+program
+	.command('config:set-api-key')
+	.description('Set the OpenAI API key')
+	.argument('<key>', 'OpenAI API key')
+	.action(async (key) => {
+		const exitCode = handleSetApiKeyCommand(key);
+		process.exit(exitCode);
+	});
+
+// Add set Langfuse config command
+program
+	.command('set-langfuse-config')
+	.description('Configure Langfuse for telemetry and tracing')
+	.argument('[config]', 'JSON configuration with secretKey, publicKey, and baseUrl')
+	.option('--enable', 'Enable Langfuse logging')
+	.option('--disable', 'Disable Langfuse logging')
+	.action(async (config, options) => {
+		const exitCode = await handleSetLangfuseConfigCommand(config, options);
 		process.exit(exitCode);
 	});
 
@@ -143,34 +155,6 @@ program
 	)
 	.action(async (inputPath, options) => {
 		const exitCode = await handleTestLintCommand(inputPath, options);
-		process.exit(exitCode);
-	});
-
-// Add the export-traces command
-program
-	.command('export-traces')
-	.description('Export Langfuse traces to files in your home directory')
-	.option(
-		'--limit <number>',
-		'Maximum number of traces to export',
-		'100'
-	)
-	.option(
-		'--days <number>',
-		'Number of days back to fetch traces from',
-		'7'
-	)
-	.option(
-		'--filter <json>',
-		'JSON filter to apply when fetching traces'
-	)
-	.option(
-		'--format <format>',
-		'File format to save traces (json or ndjson)',
-		'json'
-	)
-	.action(async (options) => {
-		const exitCode = await handleExportTracesCommand(options);
 		process.exit(exitCode);
 	});
 

@@ -20,8 +20,9 @@ import {
   hasExceededRetries
 } from './edges.js';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
-import { langfuseCallbackHandler } from '../langsmith.js';
-import { fileLoggingCallbackHandler } from './utils/logging-callback.js';
+import { langfuseCallbackHandler } from '../langfuse.js';
+import { setupUnshallowDirectory } from './utils/filesystem.js';
+import { logger } from './utils/logging-callback.js';
 
 // Configure state
 const WorkflowStateAnnotation = Annotation.Root({
@@ -215,7 +216,7 @@ export function createWorkflow(
 		try {
 			// Execute the graph with the initial state
 			const result = await enzymeToRtlConverterGraph.invoke(initialState, {
-				callbacks: [langfuseCallbackHandler, fileLoggingCallbackHandler],
+				callbacks: [langfuseCallbackHandler],
 				recursionLimit: 100
 			});
 			return result as WorkflowState;
@@ -246,6 +247,58 @@ export async function processSingleFile(
 	context: EnrichedContext,
 	options: WorkflowOptions = {}
 ): Promise<WorkflowState> {
+	// Set up the .unshallow directory for logging and temporary files
+	const { unshallowDir, logsPath, attemptPath } = await setupUnshallowDirectory(testFilePath);
+
+	// Configure the logger with the logs file path
+	logger.setLogsPath(logsPath);
+
+	logger.info("workflow", `Starting migration for ${testFilePath}`);
+	logger.info("workflow", `Created unshallow directory at ${unshallowDir}`);
+
+	// Create the workflow with the unshallow directory paths
 	const workflow = createWorkflow(testFilePath, context, options);
-	return await workflow.execute();
+
+	// Update the initial state with the unshallow paths
+	workflow.initialState.file = {
+		...workflow.initialState.file,
+		unshallowDir,
+		logsPath,
+		attemptPath
+	};
+
+	try {
+		// Execute the workflow
+		const result = await workflow.execute();
+
+		// If the migration was successful, finalize it
+		if (result.file.status === 'success' && result.file.rtlTest) {
+			logger.success("workflow", "Migration completed successfully");
+
+			// Replace the original file with the RTL test
+			await import('fs/promises').then(fs =>
+				fs.writeFile(testFilePath, result.file.rtlTest!)
+			);
+
+			// Clean up the .unshallow directory
+			await import('./utils/filesystem.js').then(({ cleanupUnshallowDirectory }) =>
+				cleanupUnshallowDirectory(unshallowDir)
+			);
+		} else {
+			logger.info("workflow", `Migration completed with status: ${result.file.status}`);
+		}
+
+		return result;
+	} catch (error) {
+		logger.error("workflow", "Migration failed with error", error);
+
+		return {
+			file: {
+				...workflow.initialState.file,
+				status: 'failed',
+				error: error instanceof Error ? error : new Error(String(error)),
+				currentStep: WorkflowStep.INITIALIZE,
+			},
+		};
+	}
 }

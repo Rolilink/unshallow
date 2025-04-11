@@ -5,6 +5,7 @@ import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { stripAnsiCodes } from '../utils/openai.js';
+import { logger } from '../utils/logging-callback.js';
 
 // Extended exec type that includes code in the response
 const execAsync = promisify(exec) as (command: string, options?: any) => Promise<{
@@ -18,12 +19,13 @@ const execAsync = promisify(exec) as (command: string, options?: any) => Promise
  */
 export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => {
   const { file } = state;
+  const NODE_NAME = 'run-test';
 
-  console.log(`[run-test] Testing: ${file.path}`);
+  logger.info(NODE_NAME, `Testing: ${file.path}`);
 
   // Skip if configured to skip tests
   if (file.skipTest) {
-    console.log(`[run-test] Skipped (skipTest enabled)`);
+    logger.info(NODE_NAME, `Skipped (skipTest enabled)`);
     return {
       file: {
         ...file,
@@ -37,24 +39,31 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
   }
 
   try {
-    // Create temporary file for testing
-    const tempDir = path.dirname(file.path);
-    const tempFile = file.tempPath || path.join(tempDir, `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`);
+    // Use the attempt file in the .unshallow directory if available
+    const testFile = file.attemptPath || file.tempPath || path.join(
+      path.dirname(file.path),
+      `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`
+    );
 
-    // Write the RTL test to the temp file
-    await fs.writeFile(tempFile, file.rtlTest || '');
+    // Write the RTL test to the test file if attemptPath wasn't already set
+    if (!file.attemptPath) {
+      await fs.writeFile(testFile, file.rtlTest || '');
+    } else {
+      // Otherwise update the attempt file with the current RTL test
+      await fs.writeFile(file.attemptPath, file.rtlTest || '');
+    }
 
-    // Store the tempPath for future use
+    // Update the file state with the test file path
     const updatedFile = {
       ...file,
-      tempPath: tempFile,
+      tempPath: testFile,
     };
 
     // Run the test command
     const testCmd = file.commands.test || 'yarn test';
-    const fullCommand = `${testCmd} ${tempFile}`;
+    const fullCommand = `${testCmd} ${testFile}`;
 
-    console.log(`[run-test] Executing: ${fullCommand}`);
+    logger.info(NODE_NAME, `Executing: ${fullCommand}`);
 
     let exitCode = 0;
     let stdout = '';
@@ -70,76 +79,68 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
       stderr = execError.stderr || '';
       exitCode = execError.code || 1;
 
-      console.log(`[run-test] Command failed with exit code: ${exitCode}`);
+      logger.info(NODE_NAME, `Command failed with exit code: ${exitCode}`);
 
-      // Log the STDERR content for better debugging
+      // Log a sample of the errors for better debugging
       if (stderr) {
-        console.log(`[run-test] STDERR content:`);
-        console.log(stderr);
-      }
-
-      // Log only a sample of the errors, not the full output
-      const errorLines = stderr.split('\n').filter(line => line.includes('error'));
-      if (errorLines.length > 0) {
-        const errorSample = errorLines.slice(0, 3).join('\n');
-        console.log(`[run-test] Error sample:\n${errorSample}${errorLines.length > 3 ? '\n...' : ''}`);
+        logger.error(NODE_NAME, 'Test execution failed, error output:');
+        const errorLines = stderr.split('\n').filter(line => line.includes('error'));
+        if (errorLines.length > 0) {
+          const errorSample = errorLines.slice(0, 3).join('\n');
+          logger.error(NODE_NAME, `Error sample:\n${errorSample}${errorLines.length > 3 ? '\n...' : ''}`);
+        }
       }
     }
 
-    // Check if the test failed based on exit code
-    if (exitCode !== 0) {
-      console.log(`[run-test] Test failed with exit code: ${exitCode}`);
+    // Clean up the ANSI codes for better log readability
+    stdout = stripAnsiCodes(stdout);
+    stderr = stripAnsiCodes(stderr);
 
-      // Just collect the raw output without parsing
-      const rawOutput = [
-        `Exit code: ${exitCode}`,
-        '--- STDOUT ---',
-        stdout,
-        '--- STDERR ---',
-        stderr
-      ].join('\n');
+    // Log the output for diagnosis
+    const summaryLines = 10;
+    if (stdout) {
+      const stdoutSummary = stdout.split('\n').slice(0, summaryLines).join('\n');
+      logger.info(NODE_NAME, `STDOUT summary (${stdout.length} chars):\n${stdoutSummary}${stdout.split('\n').length > summaryLines ? '\n...' : ''}`);
+    }
 
-      // Clean the output by removing ANSI escape codes
-      const cleanedOutput = stripAnsiCodes(rawOutput);
+    // Determine test result
+    const testResult = {
+      success: exitCode === 0,
+      output: `${stdout}\n${stderr}`.trim(),
+      exitCode,
+    };
 
+    // Return the updated state with the test result
+    if (testResult.success) {
+      logger.success(NODE_NAME, 'Test passed successfully');
       return {
         file: {
           ...updatedFile,
-          testResult: {
-            success: false,
-            output: cleanedOutput,
-            errors: [cleanedOutput], // Pass the cleaned output as a single error item
-            exitCode: exitCode
-          },
+          testResult,
+          currentStep: WorkflowStep.RUN_TEST_PASSED,
+          status: 'success',
+        },
+      };
+    } else {
+      logger.error(NODE_NAME, 'Test failed');
+      return {
+        file: {
+          ...updatedFile,
+          testResult,
           currentStep: WorkflowStep.RUN_TEST_FAILED,
         },
       };
     }
-
-    console.log(`[run-test] Test passed`);
-
-    // Test succeeded - setting RUN_TEST_PASSED to properly advance the workflow
-    return {
-      file: {
-        ...updatedFile,
-        testResult: {
-          success: true,
-          output: stripAnsiCodes(stdout), // Clean ANSI codes from successful output too
-          exitCode: 0
-        },
-        currentStep: WorkflowStep.RUN_TEST_PASSED,
-      },
-    };
   } catch (error) {
-    console.error(`[run-test] Error: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(NODE_NAME, 'Error running test', error);
 
     return {
       file: {
         ...file,
         testResult: {
           success: false,
-          output: '',
-          error: error instanceof Error ? error : new Error(String(error)),
+          output: error instanceof Error ? error.message : String(error),
+          error,
         },
         currentStep: WorkflowStep.RUN_TEST_ERROR,
       },

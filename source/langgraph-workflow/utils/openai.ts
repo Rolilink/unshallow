@@ -1,5 +1,5 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { langfuseCallbackHandler } from '../../langsmith.js';
+import { langfuseCallbackHandler } from '../../langfuse.js';
 import { ConfigManager } from '../../config/config-manager.js';
 import { StructuredOutputParser } from 'langchain/output_parsers';
 import { z } from 'zod';
@@ -137,27 +137,27 @@ function preprocessJsonContent(content: string): string {
 
     // Handle the specific case that's causing issues - single quotes in test names and strings
     // This needs to happen BEFORE the general replacement
-    processed = processed.replace(/(it\()(['"])(.*?['"].*?)(\2)/g, (match, prefix, quote, content, endQuote) => {
+    processed = processed.replace(/(it\()(['"])(.*?['"].*?)(\2)/g, (_match, prefix, quote, content, endQuote) => {
       // Replace any unescaped single quotes within the content with escaped ones
       const escaped = content.replace(/(?<!\\)'/g, "\\'");
       return `${prefix}${quote}${escaped}${endQuote}`;
     });
 
     // Replace unescaped single quotes within string values in JSON fields
-    processed = processed.replace(/"((?:rtl|plan|test|code|updatedTestFile|explanation)[^"]*)":\s*"(.*?)"/gs, (match, fieldName, fieldValue) => {
+    processed = processed.replace(/"((?:rtl|plan|test|code|updatedTestFile|explanation)[^"]*)":\s*"(.*?)"/gs, (_match, fieldName, fieldValue) => {
       // Escape any unescaped single quotes in the field value
       const escapedValue = fieldValue.replace(/(?<!\\)'/g, "\\'");
 
       // Further special handling for test and RTL code which often contains these patterns
       let enhancedValue = escapedValue;
       // Handle test descriptions and assertions with single quotes
-      enhancedValue = enhancedValue.replace(/(it\(|test\(|expect\(|describe\()(['"])(.*?)(\2)/g, (match, func, quote, content, endQuote) => {
+      enhancedValue = enhancedValue.replace(/(it\(|test\(|expect\(|describe\()(['"])(.*?)(\2)/g, (_match, func, quote, content, endQuote) => {
         const cleanContent = content.replace(/(?<!\\)'/g, "\\'");
         return `${func}${quote}${cleanContent}${endQuote}`;
       });
 
       // Handle specific attribute matches like { name: /Pattern/i } or { name: 'string' }
-      enhancedValue = enhancedValue.replace(/(\{\s*name:\s*)(['"])(.*?)(\2)/g, (match, prefix, quote, content, endQuote) => {
+      enhancedValue = enhancedValue.replace(/(\{\s*name:\s*)(['"])(.*?)(\2)/g, (_match, prefix, quote, content, endQuote) => {
         const cleanContent = content.replace(/(?<!\\)'/g, "\\'");
         return `${prefix}${quote}${cleanContent}${endQuote}`;
       });
@@ -174,7 +174,7 @@ function preprocessJsonContent(content: string): string {
     // Additional handling for specific JSON syntax issues that commonly occur
     // Handle specific cases where a single quote is used within a string that's
     // already within a JSON string (double nested quoting)
-    processed = processed.replace(/\\['"]([^'"]*?)['"](['"])/g, (match, content, endQuote) => {
+    processed = processed.replace(/\\['"]([^'"]*?)['"](['"])/g, (_match, content, endQuote) => {
       // Make sure any internal quotes are properly escaped
       const cleanContent = content.replace(/(?<!\\)'/g, "\\'").replace(/(?<!\\)"/g, '\\"');
       return `\\"${cleanContent}\\"${endQuote}`;
@@ -186,7 +186,7 @@ function preprocessJsonContent(content: string): string {
     if (openQuotes % 2 !== 0) {
       console.log('Detected unbalanced quotes, attempting basic fix');
       // Find object boundaries to fix
-      processed = processed.replace(/\{([^{}]*)\}/g, (match, content) => {
+      processed = processed.replace(/\{([^{}]*)\}/g, (_match, content) => {
         const fixedContent = content.replace(/(?<!\\)"/g, (q, index, str) => {
           // Count quotes before this one to determine if it should be escaped
           const quotesBefore = (str.substring(0, index).match(/(?<!\\)"/g) || []).length;
