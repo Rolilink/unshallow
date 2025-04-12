@@ -1,45 +1,40 @@
 /**
  * Handlers for configuration commands
  */
-import { ConfigManager } from '../config/config-manager.js';
+import {ConfigManager} from '../config/config-manager.js';
 
 /**
- * Handles the set-api-key command
+ * Handles the config:set-api-key command
  */
-export function handleSetApiKeyCommand(apiKey: string) {
-  try {
+export async function handleSetApiKeyCommand(apiKey: string): Promise<void> {
     const configManager = new ConfigManager();
-    configManager.setOpenAIKey(apiKey);
-    console.log('OpenAI API key set successfully.');
-    return 0;
-  } catch (error) {
-    console.error('Failed to set OpenAI API key:', error);
-    return 1;
+	await configManager.setOpenAIKey(apiKey);
+
+	// Mask api key for display
+	const currentApiKey = await configManager.getOpenAIKey();
+	if (currentApiKey) {
+		const maskedKey = maskApiKey(currentApiKey);
+		console.log(`API key set successfully: ${maskedKey}`);
+	} else {
+		console.log('API key set successfully');
   }
 }
 
 /**
- * Handles the get-api-key command
+ * Handles the config:get-api-key command
  */
-export function handleGetApiKeyCommand() {
-  try {
+export async function handleGetApiKeyCommand(): Promise<void> {
     const configManager = new ConfigManager();
-    const apiKey = configManager.getOpenAIKey();
+	const apiKey = await configManager.getOpenAIKey();
 
-    if (apiKey) {
-      // Only show first few and last few characters for security
+	if (!apiKey) {
+		console.log('No API key set');
+		return;
+	}
+
+	// Mask api key for display
       const maskedKey = maskApiKey(apiKey);
-      console.log(`Current OpenAI API key: ${maskedKey}`);
-    } else {
-      console.log('No OpenAI API key configured.');
-      console.log('Set one with: unshallow config set-api-key YOUR_API_KEY');
-    }
-
-    return 0;
-  } catch (error) {
-    console.error('Failed to get OpenAI API key:', error);
-    return 1;
-  }
+	console.log(`Current API key: ${maskedKey}`);
 }
 
 /**

@@ -3,6 +3,27 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 
 /**
+ * Filesystem utilities for unshallow
+ *
+ * This is a convenience export file that re-exports all
+ * filesystem-related utilities from their respective modules.
+ */
+
+// Export everything from the new filesystem modules
+export * from './config-filesystem.js';
+export * from './test-filesystem.js';
+export * from './artifact-filesystem.js';
+
+// Export convenience instances for common use
+import {ConfigFileSystem} from './config-filesystem.js';
+import {TestFileSystem} from './test-filesystem.js';
+import {ArtifactFileSystem} from './artifact-filesystem.js';
+
+export const configFileSystem = new ConfigFileSystem();
+export const testFileSystem = new TestFileSystem();
+export const artifactFileSystem = new ArtifactFileSystem();
+
+/**
  * Gets the component test directory path for a test file without setting up the directory
  * @param testFilePath Path to the original test file
  * @returns Path to the component's directory in .unshallow

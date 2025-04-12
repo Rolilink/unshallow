@@ -26,12 +26,13 @@ import {
 } from './edges.js';
 import {Annotation, END, START, StateGraph} from '@langchain/langgraph';
 import {langfuseCallbackHandler} from '../langfuse.js';
-import {
-	setupUnshallowDirectory,
-	cleanupTestDirectory,
-	cleanupTempFile,
-} from './utils/filesystem.js';
 import {logger} from './utils/logging-callback.js';
+import {TestFileSystem} from './utils/test-filesystem.js';
+import {ArtifactFileSystem} from './utils/artifact-filesystem.js';
+
+// Initialize filesystem helpers
+const testFileSystem = new TestFileSystem();
+const artifactFileSystem = new ArtifactFileSystem();
 
 // Configure state
 const WorkflowStateAnnotation = Annotation.Root({
@@ -274,8 +275,13 @@ export async function processSingleFile(
 	options: WorkflowOptions = {},
 ): Promise<WorkflowState> {
 	// Set up the .unshallow directory for logging and temporary files
-	const {unshallowDir, testDir, logsPath, tempPath, attemptPath} =
-		await setupUnshallowDirectory(testFilePath);
+	const testDirectoryPaths = await testFileSystem.setupTestDirectory(
+		testFilePath,
+	);
+	const {unshallowDir, testDir, tempPath, attemptPath} = testDirectoryPaths;
+
+	// Initialize the logs file
+	const logsPath = await artifactFileSystem.initializeLogsFile(testDir);
 
 	// Configure the logger with the logs file path
 	logger.setLogsPath(logsPath);
@@ -309,11 +315,8 @@ export async function processSingleFile(
 			);
 
 			// Clean up the temporary files and test directory
-			await cleanupTempFile(tempPath);
-			await cleanupTestDirectory(testDir);
-
-			// Note: We don't need to call safelyCleanupUnshallowDirectory here
-			// as cleanupTestDirectory already calls it when cleaning up a test directory
+			await artifactFileSystem.cleanupTempFile(tempPath);
+			await testFileSystem.cleanupTestDirectory(testDir);
 		} else {
 			logger.info(
 				'workflow',
@@ -322,8 +325,10 @@ export async function processSingleFile(
 
 			// If the migration failed but we have a partial result, save it to the attempt file
 			if (result.file.rtlTest) {
-				await import('fs/promises').then(fs =>
-					fs.writeFile(attemptPath, result.file.rtlTest!),
+				await artifactFileSystem.saveAttemptFile(
+					testDir,
+					testFilePath,
+					result.file.rtlTest,
 				);
 			}
 		}

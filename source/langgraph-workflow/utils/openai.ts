@@ -1,21 +1,28 @@
-import { ChatOpenAI } from '@langchain/openai';
-import { langfuseCallbackHandler } from '../../langfuse.js';
-import { ConfigManager } from '../../config/config-manager.js';
-import { StructuredOutputParser } from 'langchain/output_parsers';
-import { z } from 'zod';
+import {ChatOpenAI} from '@langchain/openai';
+import {langfuseCallbackHandler} from '../../langfuse.js';
+import {ConfigManager} from '../../config/config-manager.js';
+import {StructuredOutputParser} from 'langchain/output_parsers';
+import {z} from 'zod';
 
 /**
  * Get the OpenAI API key from config manager or environment
  */
-export function getApiKey(): string {
+async function getApiKey(): Promise<string> {
+	try {
   const configManager = new ConfigManager();
-  const apiKey = configManager.getOpenAIKey();
+		const apiKey = await configManager.getOpenAIKey();
 
   if (!apiKey) {
-    throw new Error('OpenAI API key not found. Please set it using: unshallow config set-api-key YOUR_API_KEY');
+			throw new Error(
+				"OpenAI API key is not set. Use 'unshallow config:set-api-key' to set it.",
+			);
   }
 
   return apiKey;
+	} catch (error) {
+		console.error('Error getting OpenAI API key:', error);
+		throw error;
+	}
 }
 
 /**
@@ -31,57 +38,95 @@ export function stripAnsiCodes(text: string): string {
  * Define the schema for the RTL fix response
  */
 export const rtlFixResponseSchema = z.object({
-  explanation: z.string().describe("Explanation of what changes were made to fix the issues"),
-  testContent: z.string().describe("The fixed test content that addresses the errors"),
-  focusedTest: z.string().describe("The name of the specific test that was fixed in this attempt")
+	explanation: z
+		.string()
+		.describe('Explanation of what changes were made to fix the issues'),
+	testContent: z
+		.string()
+		.describe('The fixed test content that addresses the errors'),
+	focusedTest: z
+		.string()
+		.describe('The name of the specific test that was fixed in this attempt'),
 });
 
 /**
  * Define the schema for the RTL fix planner response
  */
 export const rtlFixPlannerSchema = z.object({
-  explanation: z.string().describe("A concise explanation of why the tests are failing"),
-  plan: z.string().describe("The instructions on how to fix the test for the LLM to refactor, be detailed and specific, and include code blocks to illustrate the changes needed")
+	explanation: z
+		.string()
+		.describe('A concise explanation of why the tests are failing'),
+	plan: z
+		.string()
+		.describe(
+			'The instructions on how to fix the test for the LLM to refactor, be detailed and specific, and include code blocks to illustrate the changes needed',
+		),
 });
 
 /**
  * Define the schema for the RTL fix executor response
  */
 export const rtlFixExecutorSchema = z.object({
-  testContent: z.string().describe("The fixed test content that addresses the errors"),
-  explanation: z.string().describe("Explanation of changes made to implement the plan")
+	testContent: z
+		.string()
+		.describe('The fixed test content that addresses the errors'),
+	explanation: z
+		.string()
+		.describe('Explanation of changes made to implement the plan'),
 });
 
 /**
  * Define the schema for the TypeScript fix response
  */
 export const tsFixResponseSchema = z.object({
-  explanation: z.string().describe("Explanation of what changes were made to fix the TypeScript issues"),
-  testContent: z.string().describe("The fixed test content that addresses the TypeScript errors")
+	explanation: z
+		.string()
+		.describe(
+			'Explanation of what changes were made to fix the TypeScript issues',
+		),
+	testContent: z
+		.string()
+		.describe('The fixed test content that addresses the TypeScript errors'),
 });
 
 /**
  * Define the schema for the lint fix response
  */
 export const lintFixResponseSchema = z.object({
-  explanation: z.string().describe("Explanation of what changes were made to fix the lint issues"),
-  testContent: z.string().describe("The fixed test content that addresses the lint errors")
+	explanation: z
+		.string()
+		.describe('Explanation of what changes were made to fix the lint issues'),
+	testContent: z
+		.string()
+		.describe('The fixed test content that addresses the lint errors'),
 });
 
 /**
  * Define the schema for the RTL conversion planner response
  */
 export const rtlConversionPlannerSchema = z.object({
-  explanation: z.string().describe("A concise explanation of the Enzyme test's structure and what needs to be converted"),
-  plan: z.string().describe("The instructions on how to convert the test for the LLM to refactor, be detailed and specific, and include code blocks to illustrate the changes needed")
+	explanation: z
+		.string()
+		.describe(
+			"A concise explanation of the Enzyme test's structure and what needs to be converted",
+		),
+	plan: z
+		.string()
+		.describe(
+			'The instructions on how to convert the test for the LLM to refactor, be detailed and specific, and include code blocks to illustrate the changes needed',
+		),
 });
 
 /**
  * Define the schema for the RTL conversion executor response
  */
 export const rtlConversionExecutorSchema = z.object({
-  testContent: z.string().describe("The complete, converted RTL test content"),
-  explanation: z.string().describe("Explanation of the conversion process and implementation details")
+	testContent: z.string().describe('The complete, converted RTL test content'),
+	explanation: z
+		.string()
+		.describe(
+			'Explanation of the conversion process and implementation details',
+		),
 });
 
 // For backward compatibility
@@ -90,11 +135,22 @@ export const fixResponseSchema = rtlFixResponseSchema;
 export type RtlFixResponse = z.infer<typeof rtlFixResponseSchema>;
 export type RtlFixPlannerResponse = z.infer<typeof rtlFixPlannerSchema>;
 export type RtlFixExecutorResponse = z.infer<typeof rtlFixExecutorSchema>;
-export type RtlConversionPlannerResponse = z.infer<typeof rtlConversionPlannerSchema>;
-export type RtlConversionExecutorResponse = z.infer<typeof rtlConversionExecutorSchema>;
+export type RtlConversionPlannerResponse = z.infer<
+	typeof rtlConversionPlannerSchema
+>;
+export type RtlConversionExecutorResponse = z.infer<
+	typeof rtlConversionExecutorSchema
+>;
 export type TsFixResponse = z.infer<typeof tsFixResponseSchema>;
 export type LintFixResponse = z.infer<typeof lintFixResponseSchema>;
-export type FixResponse = RtlFixResponse | TsFixResponse | LintFixResponse | RtlFixPlannerResponse | RtlFixExecutorResponse | RtlConversionPlannerResponse | RtlConversionExecutorResponse;
+export type FixResponse =
+	| RtlFixResponse
+	| TsFixResponse
+	| LintFixResponse
+	| RtlFixPlannerResponse
+	| RtlFixExecutorResponse
+	| RtlConversionPlannerResponse
+	| RtlConversionExecutorResponse;
 
 /**
  * Cleans markdown code blocks from a string
@@ -105,7 +161,10 @@ function cleanMarkdownCodeBlocks(content: string): string {
   // Check if the content starts with a code block marker
   if (cleanContent.startsWith('```')) {
     // Remove the opening code block marker (```json or just ```)
-    cleanContent = cleanContent.replace(/^```(?:json|js|javascript|typescript|ts|gherkin|md|markdown|text)?\s*/m, '');
+		cleanContent = cleanContent.replace(
+			/^```(?:json|js|javascript|typescript|ts|gherkin|md|markdown|text)?\s*/m,
+			'',
+		);
 
     // Remove the closing code block marker
     cleanContent = cleanContent.replace(/```\s*$/m, '');
@@ -127,7 +186,10 @@ function preprocessJsonContent(content: string): string {
     return content; // If no error, return as is
   } catch (error) {
     console.log('JSON parsing failed, attempting to preprocess content...');
-    console.log('Error:', error instanceof Error ? error.message : String(error));
+		console.log(
+			'Error:',
+			error instanceof Error ? error.message : String(error),
+		);
 
     // Regex-based preprocessing for common issues
 
@@ -137,48 +199,65 @@ function preprocessJsonContent(content: string): string {
 
     // Handle the specific case that's causing issues - single quotes in test names and strings
     // This needs to happen BEFORE the general replacement
-    processed = processed.replace(/(it\()(['"])(.*?['"].*?)(\2)/g, (_match, prefix, quote, content, endQuote) => {
+		processed = processed.replace(
+			/(it\()(['"])(.*?['"].*?)(\2)/g,
+			(_match, prefix, quote, content, endQuote) => {
       // Replace any unescaped single quotes within the content with escaped ones
       const escaped = content.replace(/(?<!\\)'/g, "\\'");
       return `${prefix}${quote}${escaped}${endQuote}`;
-    });
+			},
+		);
 
     // Replace unescaped single quotes within string values in JSON fields
-    processed = processed.replace(/"((?:rtl|plan|test|code|updatedTestFile|explanation)[^"]*)":\s*"(.*?)"/gs, (_match, fieldName, fieldValue) => {
+		processed = processed.replace(
+			/"((?:rtl|plan|test|code|updatedTestFile|explanation)[^"]*)":\s*"(.*?)"/gs,
+			(_match, fieldName, fieldValue) => {
       // Escape any unescaped single quotes in the field value
       const escapedValue = fieldValue.replace(/(?<!\\)'/g, "\\'");
 
       // Further special handling for test and RTL code which often contains these patterns
       let enhancedValue = escapedValue;
       // Handle test descriptions and assertions with single quotes
-      enhancedValue = enhancedValue.replace(/(it\(|test\(|expect\(|describe\()(['"])(.*?)(\2)/g, (_match, func, quote, content, endQuote) => {
+				enhancedValue = enhancedValue.replace(
+					/(it\(|test\(|expect\(|describe\()(['"])(.*?)(\2)/g,
+					(_match, func, quote, content, endQuote) => {
         const cleanContent = content.replace(/(?<!\\)'/g, "\\'");
         return `${func}${quote}${cleanContent}${endQuote}`;
-      });
+					},
+				);
 
       // Handle specific attribute matches like { name: /Pattern/i } or { name: 'string' }
-      enhancedValue = enhancedValue.replace(/(\{\s*name:\s*)(['"])(.*?)(\2)/g, (_match, prefix, quote, content, endQuote) => {
+				enhancedValue = enhancedValue.replace(
+					/(\{\s*name:\s*)(['"])(.*?)(\2)/g,
+					(_match, prefix, quote, content, endQuote) => {
         const cleanContent = content.replace(/(?<!\\)'/g, "\\'");
         return `${prefix}${quote}${cleanContent}${endQuote}`;
-      });
+					},
+				);
 
       return `"${fieldName}":"${enhancedValue}"`;
-    });
+			},
+		);
 
     // Fix invalid control characters
-    processed = processed.replace(/[\u0000-\u001F]+/g, "");
+		processed = processed.replace(/[\u0000-\u001F]+/g, '');
 
     // Fix unescaped backslashes before quotes
-    processed = processed.replace(/([^\\])\\(?!")/g, "$1\\\\");
+		processed = processed.replace(/([^\\])\\(?!")/g, '$1\\\\');
 
     // Additional handling for specific JSON syntax issues that commonly occur
     // Handle specific cases where a single quote is used within a string that's
     // already within a JSON string (double nested quoting)
-    processed = processed.replace(/\\['"]([^'"]*?)['"](['"])/g, (_match, content, endQuote) => {
+		processed = processed.replace(
+			/\\['"]([^'"]*?)['"](['"])/g,
+			(_match, content, endQuote) => {
       // Make sure any internal quotes are properly escaped
-      const cleanContent = content.replace(/(?<!\\)'/g, "\\'").replace(/(?<!\\)"/g, '\\"');
+				const cleanContent = content
+					.replace(/(?<!\\)'/g, "\\'")
+					.replace(/(?<!\\)"/g, '\\"');
       return `\\"${cleanContent}\\"${endQuote}`;
-    });
+			},
+		);
 
     // Fix unbalanced quotes by checking for obvious issues
     // This is a simple fix, not comprehensive
@@ -189,7 +268,9 @@ function preprocessJsonContent(content: string): string {
       processed = processed.replace(/\{([^{}]*)\}/g, (_match, content) => {
         const fixedContent = content.replace(/(?<!\\)"/g, (q, index, str) => {
           // Count quotes before this one to determine if it should be escaped
-          const quotesBefore = (str.substring(0, index).match(/(?<!\\)"/g) || []).length;
+					const quotesBefore = (
+						str.substring(0, index).match(/(?<!\\)"/g) || []
+					).length;
           return quotesBefore % 2 === 0 ? q : '\\"';
         });
         return `{${fixedContent}}`;
@@ -204,7 +285,12 @@ function preprocessJsonContent(content: string): string {
       console.log('Preprocessing successfully fixed JSON issues');
       return processed;
     } catch (secondError) {
-      console.warn('Preprocessing could not fully fix JSON issues:', secondError instanceof Error ? secondError.message : String(secondError));
+			console.warn(
+				'Preprocessing could not fully fix JSON issues:',
+				secondError instanceof Error
+					? secondError.message
+					: String(secondError),
+			);
 
       // Last resort: Try to handle the case with regex pattern that specifically targets the position referenced in the error
       if (secondError instanceof SyntaxError) {
@@ -212,7 +298,9 @@ function preprocessJsonContent(content: string): string {
         const positionMatch = errorMessage.match(/position (\d+)/);
         if (positionMatch && positionMatch[1]) {
           const position = parseInt(positionMatch[1], 10);
-          console.log(`Attempting to fix JSON at specific position ${position}`);
+					console.log(
+						`Attempting to fix JSON at specific position ${position}`,
+					);
 
           // Create a buffer around the error position
           const start = Math.max(0, position - 20);
@@ -221,7 +309,9 @@ function preprocessJsonContent(content: string): string {
           console.log(`Issue near: "${snippet}"`);
 
           // Apply targeted fix for single quotes in test names which is a common issue
-          processed = processed.substring(0, position) + processed.substring(position).replace(/'/g, "\\'");
+					processed =
+						processed.substring(0, position) +
+						processed.substring(position).replace(/'/g, "\\'");
 
           // Try parsing one more time
           try {
@@ -243,7 +333,11 @@ function preprocessJsonContent(content: string): string {
  */
 function postProcessParsedOutput<T>(parsedOutput: T): T {
   // For planner responses, replace escaped newlines with actual newlines in the plan field
-  if (parsedOutput && typeof parsedOutput === 'object' && 'plan' in parsedOutput) {
+	if (
+		parsedOutput &&
+		typeof parsedOutput === 'object' &&
+		'plan' in parsedOutput
+	) {
     const output = parsedOutput as any;
     // Replace escaped newlines with actual newlines
     output.plan = output.plan.replace(/\\n/g, '\n');
@@ -269,7 +363,7 @@ export async function callOpenAIStructured<T extends z.ZodType>({
   schema,
   model = 'gpt-4o-mini',
   temperature,
-  nodeName
+	nodeName,
 }: {
   prompt: string;
   schema: T;
@@ -304,14 +398,16 @@ Return ONLY the JSON object and nothing else.`;
   // Retry loop
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`Attempt ${attempt}/${MAX_RETRIES} to call OpenAI structured API`);
+			console.log(
+				`Attempt ${attempt}/${MAX_RETRIES} to call OpenAI structured API`,
+			);
 
       // Configure the LLM with appropriate options for the model
       const llmOptions: any = {
         modelName: model,
-        openAIApiKey: getApiKey(),
+				openAIApiKey: await getApiKey(),
         callbacks: [langfuseCallbackHandler],
-        response_format: { type: "json_object" },
+				response_format: {type: 'json_object'},
       };
 
       // Only add temperature for models that support it
@@ -331,12 +427,15 @@ Return ONLY the JSON object and nothing else.`;
       const tags = nodeName ? [`node:${nodeName}`] : undefined;
 
       // Use the LLM directly with structured output
-      const result = await llm.invoke([
+			const result = await llm.invoke(
+				[
         {
-          type: "human",
-          content: fullPrompt
-        }
-      ], { tags });
+						type: 'human',
+						content: fullPrompt,
+					},
+				],
+				{tags},
+			);
 
       // Parse the response manually
       const content = result.content.toString();
@@ -357,7 +456,10 @@ Return ONLY the JSON object and nothing else.`;
         return postProcessParsedOutput(parsedOutput);
       } catch (parseError) {
         // If JSON parsing still fails, log and throw to trigger retry
-        console.error('JSON parsing failed after preprocessing:', parseError instanceof Error ? parseError.message : String(parseError));
+				console.error(
+					'JSON parsing failed after preprocessing:',
+					parseError instanceof Error ? parseError.message : String(parseError),
+				);
         throw parseError;
       }
     } catch (error) {
@@ -368,7 +470,10 @@ Return ONLY the JSON object and nothing else.`;
       }
 
       // Log the error for this attempt
-      console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+			console.error(
+				`Attempt ${attempt} failed:`,
+				error instanceof Error ? error.message : String(error),
+			);
 
       // Calculate exponential backoff delay
       const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
@@ -380,19 +485,22 @@ Return ONLY the JSON object and nothing else.`;
   }
 
   // This should never be reached due to the throw in the last attempt
-  throw new Error("Unexpected: Retry loop completed without success or error");
+	throw new Error('Unexpected: Retry loop completed without success or error');
 }
 
 /**
  * Calls OpenAI with the given prompt and returns the completion as a raw string
  */
-export async function callOpenAI(prompt: string, nodeName?: string): Promise<string> {
+export async function callOpenAI(
+	prompt: string,
+	nodeName?: string,
+): Promise<string> {
   try {
     // Configure the LLM
     const llm = new ChatOpenAI({
       temperature: 0.2,
       modelName: 'gpt-4o-mini',
-      openAIApiKey: getApiKey(),
+			openAIApiKey: await getApiKey(),
       callbacks: [langfuseCallbackHandler],
     });
 
@@ -400,12 +508,15 @@ export async function callOpenAI(prompt: string, nodeName?: string): Promise<str
     const tags = nodeName ? [`node:${nodeName}`] : undefined;
 
     // Call the LLM directly
-    const result = await llm.invoke([
+		const result = await llm.invoke(
+			[
       {
-        type: "human",
-        content: prompt
-      }
-    ], { tags });
+					type: 'human',
+					content: prompt,
+				},
+			],
+			{tags},
+		);
 
     console.log('Raw response received from OpenAI');
 
@@ -414,7 +525,12 @@ export async function callOpenAI(prompt: string, nodeName?: string): Promise<str
 
     // Strip code block markers if present
     // This will remove ```tsx and ``` that wrap the code
-    content = content.replace(/^```(?:tsx|jsx|ts|js)?(?:\n|\r\n|\r)([\s\S]*?)(?:\n|\r\n|\r)```$/gm, '$1').trim();
+		content = content
+			.replace(
+				/^```(?:tsx|jsx|ts|js)?(?:\n|\r\n|\r)([\s\S]*?)(?:\n|\r\n|\r)```$/gm,
+				'$1',
+			)
+			.trim();
 
     // If code is still wrapped in backticks (for any reason), try a more general approach
     if (content.startsWith('```') && content.endsWith('```')) {

@@ -19,37 +19,42 @@ const program = new Command()
 // Add the config command
 program.command('config').description('Configuration management');
 
-// Add get API key command
-program
-	.command('config:get-api-key')
-	.description('View the current OpenAI API key (masked)')
-	.action(() => {
-		const exitCode = handleGetApiKeyCommand();
-		process.exit(exitCode);
-	});
-
-// Add set API key command
+// Add config:set-api-key subcommand
 program
 	.command('config:set-api-key')
-	.description('Set the OpenAI API key')
-	.argument('<key>', 'OpenAI API key')
-	.action(async key => {
-		const exitCode = handleSetApiKeyCommand(key);
-		process.exit(exitCode);
+	.description('Set your OpenAI API key')
+	.argument('<api-key>', 'Your OpenAI API key')
+	.action(async apiKey => {
+		try {
+			await handleSetApiKeyCommand(apiKey);
+			process.exit(0);
+		} catch (error) {
+			console.error('Error:', error);
+			process.exit(1);
+		}
 	});
 
-// Add set Langfuse config command
+// Add config:get-api-key subcommand
 program
-	.command('set-langfuse-config')
-	.description('Configure Langfuse for telemetry and tracing')
-	.argument(
-		'[config]',
-		'JSON configuration with secretKey, publicKey, and baseUrl',
-	)
-	.option('--enable', 'Enable Langfuse logging')
-	.option('--disable', 'Disable Langfuse logging')
-	.action(async (config, options) => {
-		const exitCode = await handleSetLangfuseConfigCommand(config, options);
+	.command('config:get-api-key')
+	.description('Get your OpenAI API key')
+	.action(async () => {
+		try {
+			await handleGetApiKeyCommand();
+			process.exit(0);
+		} catch (error) {
+			console.error('Error:', error);
+			process.exit(1);
+		}
+	});
+
+// Add config:set-langfuse-config subcommand
+program
+	.command('config:set-langfuse-config')
+	.description('Set Langfuse configuration')
+	.argument('<config-json>', 'JSON configuration string')
+	.action(async configJson => {
+		const exitCode = await handleSetLangfuseConfigCommand(configJson);
 		process.exit(exitCode);
 	});
 

@@ -1,34 +1,42 @@
-import { CallbackHandler } from "langfuse-langchain";
-import { ConfigManager } from "./config/config-manager.js";
+import {CallbackHandler} from 'langfuse-langchain';
+import {ConfigManager} from './config/config-manager.js';
 
-// Create a function to get the Langfuse handler
-function createLangfuseHandler() {
+// Initialize handler as null initially
+let langfuseCallbackHandler: any = null;
+
+// Create and initialize the handler
+async function initializeLangfuseHandler() {
+	try {
   const configManager = new ConfigManager();
-  const langfuseConfig = configManager.getLangfuseConfig();
+		const langfuseConfig = await configManager.getLangfuseConfig();
 
-  // If Langfuse is not configured or disabled, return a no-op handler
+		// Skip setup if Langfuse is not configured or disabled
   if (!langfuseConfig || !langfuseConfig.enabled) {
-    console.log('Langfuse logging is disabled. Use "unshallow set-langfuse-config" to enable.');
-    return {
-      handleLLMStart: () => {},
-      handleLLMEnd: () => {},
-      handleChainStart: () => {},
-      handleChainEnd: () => {},
-      handleToolStart: () => {},
-      handleToolEnd: () => {},
-      // Add any other callback methods as no-ops
-    };
-  }
+			console.log('Langfuse tracing disabled');
+			return null;
+		}
 
-  // Use the configuration from the config file
-  return new CallbackHandler({
+		console.log('Initializing Langfuse tracing...');
+
+		// Create a handler with the config
+		const handler = new CallbackHandler({
     secretKey: langfuseConfig.secretKey,
     publicKey: langfuseConfig.publicKey,
-    baseUrl: langfuseConfig.baseUrl,
+			baseUrl: langfuseConfig.baseUrl || 'https://cloud.langfuse.com',
   });
+
+		console.log('Langfuse tracing initialized');
+		return handler;
+	} catch (error) {
+		console.error('Error initializing Langfuse:', error);
+		return null;
+	}
 }
 
-// Create the handler
-const langfuseHandler = createLangfuseHandler();
+// Initialize the handler asynchronously
+initializeLangfuseHandler().then(handler => {
+	langfuseCallbackHandler = handler;
+});
 
-export const langfuseCallbackHandler = langfuseHandler;
+// Export the handler
+export {langfuseCallbackHandler};

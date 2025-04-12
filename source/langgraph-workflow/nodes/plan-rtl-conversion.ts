@@ -6,10 +6,12 @@ import {planRtlConversionPrompt} from '../prompts/plan-rtl-conversion-prompt.js'
 import {z} from 'zod';
 import {formatImports} from '../utils/format-utils.js';
 import {logger} from '../utils/logging-callback.js';
-import {
-	saveFileToTestDirectory,
-	getTestDirectoryPath,
-} from '../utils/filesystem.js';
+import {TestFileSystem} from '../utils/test-filesystem.js';
+import {ArtifactFileSystem} from '../utils/artifact-filesystem.js';
+
+// Initialize filesystem helpers
+const testFileSystem = new TestFileSystem();
+const artifactFileSystem = new ArtifactFileSystem();
 
 // Define schema for plan RTL conversion output
 export const PlanRtlConversionOutputSchema = z.object({
@@ -74,8 +76,8 @@ export const planRtlConversionNode = async (
 		);
 
 		// Save the plan to the .unshallow folder
-		// Instead of relying on file.testDir, determine the directory directly from the file path
-		const testDir = getTestDirectoryPath(file.path);
+		// Calculate test directory path from the test file path
+		const testDir = testFileSystem.getTestDirectoryPath(file.path);
 
 		try {
 			await logger.info(
@@ -83,32 +85,16 @@ export const planRtlConversionNode = async (
 				`Saving Gherkin plan to test directory: ${testDir}`,
 			);
 
-			// Ensure the directory exists (saveFileToTestDirectory will handle this now)
-			const planPath = await saveFileToTestDirectory(
+			// Save the plan file
+			const planPath = await artifactFileSystem.savePlanFile(
 				testDir,
-				'plan.txt',
 				response.plan,
 			);
+
 			await logger.info(
 				NODE_NAME,
 				`Successfully saved Gherkin plan to ${planPath}`,
 			);
-
-			// Verify file was created
-			const fs = await import('fs/promises');
-			try {
-				await fs.access(planPath);
-				await logger.info(
-					NODE_NAME,
-					`Verified plan file exists at ${planPath}`,
-				);
-			} catch (accessError) {
-				await logger.error(
-					NODE_NAME,
-					`Plan file not found after saving at ${planPath}`,
-					accessError,
-				);
-			}
 		} catch (error) {
 			await logger.error(
 				NODE_NAME,

@@ -1,7 +1,6 @@
 # Todo for V0
 
 - Implement retry logic
-	- gherkin plan will be saved in the unshallow folder
   - will look for ./unshallow folders.
   - will start from the run test step and start fixing it
   - if it failed on the lint or ts step will do as well

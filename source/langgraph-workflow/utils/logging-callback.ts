@@ -1,350 +1,431 @@
-import * as fs from 'fs/promises';
+import {ArtifactFileSystem} from './artifact-filesystem.js';
 
 /**
  * Enhanced logger that writes to both console and the logs.txt file in the .unshallow directory
  * Implements detailed logging for each workflow node
  */
 export class Logger {
-  private logsPath: string | null = null;
-  private attemptCounter: Map<string, number> = new Map();
+	private logsPath: string | null = null;
+	private attemptCounter: Map<string, number> = new Map();
+	private artifactFileSystem: ArtifactFileSystem;
 
-  /**
-   * Set the logs file path
-   * @param logsPath Path to the logs file
-   */
-  setLogsPath(logsPath: string): void {
-    this.logsPath = logsPath;
-  }
+	constructor() {
+		this.artifactFileSystem = new ArtifactFileSystem();
+	}
 
-  /**
-   * Get the current attempt count for a specific operation type
-   * @param operationType The type of operation (test, ts, lint, etc.)
-   * @returns The current attempt number
-   */
-  getAttemptCount(operationType: string): number {
-    const count = this.attemptCounter.get(operationType) || 0;
-    return count;
-  }
+	/**
+	 * Set the logs file path
+	 * @param logsPath Path to the logs file
+	 */
+	setLogsPath(logsPath: string): void {
+		this.logsPath = logsPath;
+	}
 
-  /**
-   * Set the attempt counter for a specific operation type
-   * @param operationType The type of operation (test, ts, lint, etc.)
-   * @param count The count to set
-   */
-  setAttemptCount(operationType: string, count: number): void {
-    this.attemptCounter.set(operationType, count);
-  }
+	/**
+	 * Get the current attempt count for a specific operation type
+	 * @param operationType The type of operation (test, ts, lint, etc.)
+	 * @returns The current attempt number
+	 */
+	getAttemptCount(operationType: string): number {
+		const count = this.attemptCounter.get(operationType) || 0;
+		return count;
+	}
 
-  /**
-   * Increment the attempt counter for a specific operation type
-   * @param operationType The type of operation (test, ts, lint, etc.)
-   * @returns The new attempt number
-   */
-  incrementAttemptCount(operationType: string): number {
-    const currentCount = this.getAttemptCount(operationType);
-    const newCount = currentCount + 1;
-    this.attemptCounter.set(operationType, newCount);
-    return newCount;
-  }
+	/**
+	 * Set the attempt counter for a specific operation type
+	 * @param operationType The type of operation (test, ts, lint, etc.)
+	 * @param count The count to set
+	 */
+	setAttemptCount(operationType: string, count: number): void {
+		this.attemptCounter.set(operationType, count);
+	}
 
-  /**
-   * Write a message to both console and log file
-   * @param message The message to log
-   */
-  private async write(message: string): Promise<void> {
-    // Print to console - consider formatting for readability
-    console.log(message);
+	/**
+	 * Increment the attempt counter for a specific operation type
+	 * @param operationType The type of operation (test, ts, lint, etc.)
+	 * @returns The new attempt number
+	 */
+	incrementAttemptCount(operationType: string): number {
+		const currentCount = this.getAttemptCount(operationType);
+		const newCount = currentCount + 1;
+		this.attemptCounter.set(operationType, newCount);
+		return newCount;
+	}
 
-    // Write to logs file if available
-    if (this.logsPath) {
-      try {
-        await fs.appendFile(this.logsPath, `${message}\n`);
-      } catch (error) {
-        console.error(`Error writing to log file: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-  }
+	/**
+	 * Write a message to both console and log file
+	 * @param message The message to log
+	 */
+	private async write(message: string): Promise<void> {
+		// Print to console - consider formatting for readability
+		console.log(message);
 
-  /**
-   * Format a header for a log section
-   * @param nodeName The name of the node
-   * @param title The title for the section
-   * @returns Formatted header string
-   */
-  private formatHeader(nodeName: string, title: string): string {
-    const timestamp = new Date().toISOString();
-    const separator = "=".repeat(80);
-    return `\n${separator}\n[${timestamp}] [${nodeName}] ${title}\n${separator}`;
-  }
+		// Write to logs file if available
+		if (this.logsPath) {
+			try {
+				// Use ArtifactFileSystem to append to log
+				await this.artifactFileSystem.appendToLogsFile(this.logsPath, message);
+			} catch (error) {
+				console.error(
+					`Error writing to log file: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				);
+			}
+		}
+	}
 
-  /**
-   * Format content for logging with a title
-   * @param title The title for the content
-   * @param content The content to log
-   * @returns Formatted content string
-   */
-  private formatContent(title: string, content: string | null | undefined): string {
-    if (content === null || content === undefined || content === '') {
-      return `${title}: <empty>`;
-    }
-    return `${title}:\n\n${content}\n`;
-  }
+	/**
+	 * Format a header for a log section
+	 * @param nodeName The name of the node
+	 * @param title The title for the section
+	 * @returns Formatted header string
+	 */
+	private formatHeader(nodeName: string, title: string): string {
+		const timestamp = new Date().toISOString();
+		const separator = '='.repeat(80);
+		return `\n${separator}\n[${timestamp}] [${nodeName}] ${title}\n${separator}`;
+	}
 
-  /**
-   * Log a basic info message
-   * @param nodeName The name of the node
-   * @param message The message to log
-   */
-  async info(nodeName: string, message: string): Promise<void> {
-    const timestamp = new Date().toISOString();
-    const logLine = `[${timestamp}] [${nodeName}] ${message}`;
-    await this.write(logLine);
-  }
+	/**
+	 * Format content for logging with a title
+	 * @param title The title for the content
+	 * @param content The content to log
+	 * @returns Formatted content string
+	 */
+	private formatContent(
+		title: string,
+		content: string | null | undefined,
+	): string {
+		if (content === null || content === undefined || content === '') {
+			return `${title}: <empty>`;
+		}
+		return `${title}:\n\n${content}\n`;
+	}
 
-  /**
-   * Log an error message
-   * @param nodeName The name of the node
-   * @param message The error message
-   * @param error Optional error object
-   */
-  async error(nodeName: string, message: string, error?: unknown): Promise<void> {
-    const timestamp = new Date().toISOString();
-    const errorMessage = error instanceof Error ? error.message : String(error || '');
-    const stackTrace = error instanceof Error && error.stack ? `\nStack Trace:\n${error.stack}` : '';
-    const logLine = `[${timestamp}] [${nodeName}] ERROR: ${message}${errorMessage ? ` - ${errorMessage}` : ''}${stackTrace}`;
-    await this.write(logLine);
-  }
+	/**
+	 * Log a basic info message
+	 * @param nodeName The name of the node
+	 * @param message The message to log
+	 */
+	async info(nodeName: string, message: string): Promise<void> {
+		const timestamp = new Date().toISOString();
+		const logLine = `[${timestamp}] [${nodeName}] ${message}`;
+		await this.write(logLine);
+	}
 
-  /**
-   * Log a success message
-   * @param nodeName The name of the node
-   * @param message The success message
-   */
-  async success(nodeName: string, message: string): Promise<void> {
-    const timestamp = new Date().toISOString();
-    const logLine = `[${timestamp}] [${nodeName}] SUCCESS: ${message}`;
-    await this.write(logLine);
-  }
+	/**
+	 * Log an error message
+	 * @param nodeName The name of the node
+	 * @param message The error message
+	 * @param error Optional error object
+	 */
+	async error(
+		nodeName: string,
+		message: string,
+		error?: unknown,
+	): Promise<void> {
+		const timestamp = new Date().toISOString();
+		const errorMessage =
+			error instanceof Error ? error.message : String(error || '');
+		const stackTrace =
+			error instanceof Error && error.stack
+				? `\nStack Trace:\n${error.stack}`
+				: '';
+		const logLine = `[${timestamp}] [${nodeName}] ERROR: ${message}${
+			errorMessage ? ` - ${errorMessage}` : ''
+		}${stackTrace}`;
+		await this.write(logLine);
+	}
 
-  /**
-   * Log the start of a node's execution
-   * @param nodeName The name of the node
-   * @param message Optional additional message
-   */
-  async logNodeStart(nodeName: string, message?: string): Promise<void> {
-    const header = this.formatHeader(nodeName, "Starting execution");
-    await this.write(header);
-    if (message) {
-      await this.info(nodeName, message);
-    }
-  }
+	/**
+	 * Log a success message
+	 * @param nodeName The name of the node
+	 * @param message The success message
+	 */
+	async success(nodeName: string, message: string): Promise<void> {
+		const timestamp = new Date().toISOString();
+		const logLine = `[${timestamp}] [${nodeName}] SUCCESS: ${message}`;
+		await this.write(logLine);
+	}
 
-  /**
-   * Log the completion of a node's execution
-   * @param nodeName The name of the node
-   * @param status The status of the completion
-   * @param message Optional additional message
-   */
-  async logNodeComplete(nodeName: string, status: string, message?: string): Promise<void> {
-    const header = this.formatHeader(nodeName, `Completed with status: ${status}`);
-    await this.write(header);
-    if (message) {
-      await this.info(nodeName, message);
-    }
-  }
+	/**
+	 * Log the start of a node's execution
+	 * @param nodeName The name of the node
+	 * @param message Optional additional message
+	 */
+	async logNodeStart(nodeName: string, message?: string): Promise<void> {
+		const header = this.formatHeader(nodeName, 'Starting execution');
+		await this.write(header);
+		if (message) {
+			await this.info(nodeName, message);
+		}
+	}
 
-  /**
-   * Log the test file content
-   * @param nodeName The name of the node
-   * @param filePath The path to the test file
-   * @param content The content of the test file
-   */
-  async logTestFile(nodeName: string, filePath: string, content: string): Promise<void> {
-    const header = this.formatHeader(nodeName, `Test file: ${filePath}`);
-    await this.write(header);
-    await this.write(this.formatContent("Test file content", content));
-  }
+	/**
+	 * Log the completion of a node's execution
+	 * @param nodeName The name of the node
+	 * @param status The status of the completion
+	 * @param message Optional additional message
+	 */
+	async logNodeComplete(
+		nodeName: string,
+		status: string,
+		message?: string,
+	): Promise<void> {
+		const header = this.formatHeader(
+			nodeName,
+			`Completed with status: ${status}`,
+		);
+		await this.write(header);
+		if (message) {
+			await this.info(nodeName, message);
+		}
+	}
 
-  /**
-   * Log component details
-   * @param nodeName The name of the node
-   * @param componentName The name of the component
-   * @param componentCode The source code of the component
-   */
-  async logComponent(nodeName: string, componentName: string, componentCode: string): Promise<void> {
-    const header = this.formatHeader(nodeName, `Component: ${componentName}`);
-    await this.write(header);
-    await this.write(this.formatContent("Component source code", componentCode));
-  }
+	/**
+	 * Log the test file content
+	 * @param nodeName The name of the node
+	 * @param filePath The path to the test file
+	 * @param content The content of the test file
+	 */
+	async logTestFile(
+		nodeName: string,
+		filePath: string,
+		content: string,
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, `Test file: ${filePath}`);
+		await this.write(header);
+		await this.write(this.formatContent('Test file content', content));
+	}
 
-  /**
-   * Log component imports
-   * @param nodeName The name of the node
-   * @param imports The imports to log
-   */
-  async logImports(nodeName: string, imports: Record<string, string>): Promise<void> {
-    const header = this.formatHeader(nodeName, "Component imports");
-    await this.write(header);
+	/**
+	 * Log component details
+	 * @param nodeName The name of the node
+	 * @param componentName The name of the component
+	 * @param componentCode The source code of the component
+	 */
+	async logComponent(
+		nodeName: string,
+		componentName: string,
+		componentCode: string,
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, `Component: ${componentName}`);
+		await this.write(header);
+		await this.write(
+			this.formatContent('Component source code', componentCode),
+		);
+	}
 
-    // Log each import separately
-    for (const [importPath, importContent] of Object.entries(imports)) {
-      await this.write(this.formatContent(`Import: ${importPath}`, importContent));
-    }
-  }
+	/**
+	 * Log component imports
+	 * @param nodeName The name of the node
+	 * @param imports The imports to log
+	 */
+	async logImports(
+		nodeName: string,
+		imports: Record<string, string>,
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, 'Component imports');
+		await this.write(header);
 
-  /**
-   * Log example tests
-   * @param nodeName The name of the node
-   * @param examples The example tests to log
-   */
-  async logExamples(nodeName: string, examples: Record<string, string>): Promise<void> {
-    if (!examples || Object.keys(examples).length === 0) {
-      return;
-    }
+		// Log each import separately
+		for (const [importPath, importContent] of Object.entries(imports)) {
+			await this.write(
+				this.formatContent(`Import: ${importPath}`, importContent),
+			);
+		}
+	}
 
-    const header = this.formatHeader(nodeName, "Example tests");
-    await this.write(header);
+	/**
+	 * Log example tests
+	 * @param nodeName The name of the node
+	 * @param examples The example tests to log
+	 */
+	async logExamples(
+		nodeName: string,
+		examples: Record<string, string>,
+	): Promise<void> {
+		if (!examples || Object.keys(examples).length === 0) {
+			return;
+		}
 
-    // Log each example separately
-    for (const [examplePath, exampleContent] of Object.entries(examples)) {
-      await this.write(this.formatContent(`Example: ${examplePath}`, exampleContent));
-    }
-  }
+		const header = this.formatHeader(nodeName, 'Example tests');
+		await this.write(header);
 
-  /**
-   * Log RTL conversion plan
-   * @param nodeName The name of the node
-   * @param plan The conversion plan
-   * @param explanation Optional explanation of the plan
-   */
-  async logPlan(nodeName: string, plan: string, explanation?: string): Promise<void> {
-    const header = this.formatHeader(nodeName, "RTL conversion plan");
-    await this.write(header);
-    await this.write(this.formatContent("Plan", plan));
+		// Log each example separately
+		for (const [examplePath, exampleContent] of Object.entries(examples)) {
+			await this.write(
+				this.formatContent(`Example: ${examplePath}`, exampleContent),
+			);
+		}
+	}
 
-    if (explanation) {
-      await this.write(this.formatContent("Explanation", explanation));
-    }
-  }
+	/**
+	 * Log RTL conversion plan
+	 * @param nodeName The name of the node
+	 * @param plan The conversion plan
+	 * @param explanation Optional explanation of the plan
+	 */
+	async logPlan(
+		nodeName: string,
+		plan: string,
+		explanation?: string,
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, 'RTL conversion plan');
+		await this.write(header);
+		await this.write(this.formatContent('Plan', plan));
 
-  /**
-   * Log generated RTL test
-   * @param nodeName The name of the node
-   * @param rtlTest The generated RTL test
-   * @param explanation Optional explanation of the generation
-   */
-  async logRtlTest(nodeName: string, rtlTest: string, explanation?: string): Promise<void> {
-    const header = this.formatHeader(nodeName, "Generated RTL test");
-    await this.write(header);
-    await this.write(this.formatContent("RTL test content", rtlTest));
+		if (explanation) {
+			await this.write(this.formatContent('Explanation', explanation));
+		}
+	}
 
-    if (explanation) {
-      await this.write(this.formatContent("Explanation", explanation));
-    }
-  }
+	/**
+	 * Log generated RTL test
+	 * @param nodeName The name of the node
+	 * @param rtlTest The generated RTL test
+	 * @param explanation Optional explanation of the generation
+	 */
+	async logRtlTest(
+		nodeName: string,
+		rtlTest: string,
+		explanation?: string,
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, 'Generated RTL test');
+		await this.write(header);
+		await this.write(this.formatContent('RTL test content', rtlTest));
 
-  /**
-   * Log command execution
-   * @param nodeName The name of the node
-   * @param command The command being executed
-   * @param stdout The standard output
-   * @param stderr The standard error
-   * @param exitCode The exit code
-   * @param attempt Optional attempt number
-   */
-  async logCommand(
-    nodeName: string,
-    command: string,
-    stdout: string,
-    stderr: string,
-    exitCode: number,
-    attemptType?: string
-  ): Promise<void> {
-    const attemptInfo = attemptType
-      ? ` (Attempt #${this.getAttemptCount(attemptType)})`
-      : '';
+		if (explanation) {
+			await this.write(this.formatContent('Explanation', explanation));
+		}
+	}
 
-    const header = this.formatHeader(nodeName, `Command execution${attemptInfo}`);
-    await this.write(header);
-    await this.write(`Command: ${command}`);
-    await this.write(`Exit code: ${exitCode}`);
-    await this.write(this.formatContent("Standard output", stdout));
-    await this.write(this.formatContent("Standard error", stderr));
+	/**
+	 * Log command execution
+	 * @param nodeName The name of the node
+	 * @param command The command being executed
+	 * @param stdout The standard output
+	 * @param stderr The standard error
+	 * @param exitCode The exit code
+	 * @param attempt Optional attempt number
+	 */
+	async logCommand(
+		nodeName: string,
+		command: string,
+		stdout: string,
+		stderr: string,
+		exitCode: number,
+		attemptType?: string,
+	): Promise<void> {
+		const attemptInfo = attemptType
+			? ` (Attempt #${this.getAttemptCount(attemptType)})`
+			: '';
 
-    if (exitCode === 0) {
-      await this.success(nodeName, "Command executed successfully");
-    } else {
-      await this.error(nodeName, `Command failed with exit code: ${exitCode}`);
-    }
-  }
+		const header = this.formatHeader(
+			nodeName,
+			`Command execution${attemptInfo}`,
+		);
+		await this.write(header);
+		await this.write(`Command: ${command}`);
+		await this.write(`Exit code: ${exitCode}`);
+		await this.write(this.formatContent('Standard output', stdout));
+		await this.write(this.formatContent('Standard error', stderr));
 
-  /**
-   * Log test errors
-   * @param nodeName The name of the node
-   * @param errors The errors to log
-   */
-  async logErrors(nodeName: string, errors: any, title: string = "Errors"): Promise<void> {
-    const header = this.formatHeader(nodeName, title);
-    await this.write(header);
+		if (exitCode === 0) {
+			await this.success(nodeName, 'Command executed successfully');
+		} else {
+			await this.error(nodeName, `Command failed with exit code: ${exitCode}`);
+		}
+	}
 
-    if (!errors || (Array.isArray(errors) && errors.length === 0)) {
-      await this.write(`${title}: <none>`);
-      return;
-    }
+	/**
+	 * Log test errors
+	 * @param nodeName The name of the node
+	 * @param errors The errors to log
+	 */
+	async logErrors(
+		nodeName: string,
+		errors: any,
+		title: string = 'Errors',
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, title);
+		await this.write(header);
 
-    // Handle different error formats
-    if (Array.isArray(errors)) {
-      for (let i = 0; i < errors.length; i++) {
-        await this.write(this.formatContent(`Error #${i+1}`, JSON.stringify(errors[i], null, 2)));
-      }
-    } else if (typeof errors === 'object') {
-      await this.write(this.formatContent(title, JSON.stringify(errors, null, 2)));
-    } else {
-      await this.write(this.formatContent(title, String(errors)));
-    }
-  }
+		if (!errors || (Array.isArray(errors) && errors.length === 0)) {
+			await this.write(`${title}: <none>`);
+			return;
+		}
 
-  /**
-   * Log accessibility data
-   * @param nodeName The name of the node
-   * @param accessibilityDump The accessibility dump
-   * @param domTree The DOM tree
-   */
-  async logAccessibilityData(nodeName: string, accessibilityDump: string, domTree: string): Promise<void> {
-    const header = this.formatHeader(nodeName, "Accessibility data");
-    await this.write(header);
-    await this.write(this.formatContent("Accessibility dump", accessibilityDump));
-    await this.write(this.formatContent("DOM tree", domTree));
-  }
+		// Handle different error formats
+		if (Array.isArray(errors)) {
+			for (let i = 0; i < errors.length; i++) {
+				await this.write(
+					this.formatContent(
+						`Error #${i + 1}`,
+						JSON.stringify(errors[i], null, 2),
+					),
+				);
+			}
+		} else if (typeof errors === 'object') {
+			await this.write(
+				this.formatContent(title, JSON.stringify(errors, null, 2)),
+			);
+		} else {
+			await this.write(this.formatContent(title, String(errors)));
+		}
+	}
 
-  /**
-   * Log fix details
-   * @param nodeName The name of the node
-   * @param fixIntent The fix intent
-   * @param explanation The explanation of the fix
-   * @param updatedTest The updated test content
-   * @param attemptType The type of attempt (for attempt counting)
-   */
-  async logFix(
-    nodeName: string,
-    fixIntent: string,
-    explanation: string | undefined,
-    updatedTest: string | undefined,
-    attemptType: string
-  ): Promise<void> {
-    const attemptCount = this.getAttemptCount(attemptType);
-    const header = this.formatHeader(nodeName, `Fix (Attempt #${attemptCount})`);
-    await this.write(header);
-    await this.write(this.formatContent("Fix intent", fixIntent));
+	/**
+	 * Log accessibility data
+	 * @param nodeName The name of the node
+	 * @param accessibilityDump The accessibility dump
+	 * @param domTree The DOM tree
+	 */
+	async logAccessibilityData(
+		nodeName: string,
+		accessibilityDump: string,
+		domTree: string,
+	): Promise<void> {
+		const header = this.formatHeader(nodeName, 'Accessibility data');
+		await this.write(header);
+		await this.write(
+			this.formatContent('Accessibility dump', accessibilityDump),
+		);
+		await this.write(this.formatContent('DOM tree', domTree));
+	}
 
-    if (explanation) {
-      await this.write(this.formatContent("Explanation", explanation));
-    }
+	/**
+	 * Log fix details
+	 * @param nodeName The name of the node
+	 * @param fixIntent The fix intent
+	 * @param explanation The explanation of the fix
+	 * @param updatedTest The updated test content
+	 * @param attemptType The type of attempt (for attempt counting)
+	 */
+	async logFix(
+		nodeName: string,
+		fixIntent: string,
+		explanation: string | undefined,
+		updatedTest: string | undefined,
+		attemptType: string,
+	): Promise<void> {
+		const attemptCount = this.getAttemptCount(attemptType);
+		const header = this.formatHeader(
+			nodeName,
+			`Fix (Attempt #${attemptCount})`,
+		);
+		await this.write(header);
+		await this.write(this.formatContent('Fix intent', fixIntent));
 
-    if (updatedTest) {
-      await this.write(this.formatContent("Updated test content", updatedTest));
-    }
-  }
+		if (explanation) {
+			await this.write(this.formatContent('Explanation', explanation));
+		}
+
+		if (updatedTest) {
+			await this.write(this.formatContent('Updated test content', updatedTest));
+		}
+	}
 }
 
 // Export a singleton instance of the logger

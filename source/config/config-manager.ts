@@ -1,177 +1,127 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'fs/promises';
+import {ConfigFileSystem} from '../langgraph-workflow/utils/config-filesystem.js';
 
 /**
- * Interface for Langfuse configuration
+ * Interface for Langfuse configuration (local definition)
  */
 export interface LangfuseConfig {
   secretKey: string;
   publicKey: string;
-  baseUrl: string;
-  enabled: boolean;
+	baseUrl?: string;
+	host?: string;
+	enabled?: boolean;
 }
 
 /**
  * Manages configuration for the unshallow CLI tool
  */
 export class ConfigManager {
-  private configDir: string;
-  private configPath: string;
-  private langfuseConfigPath: string;
-  private config: Record<string, any>;
+	private configFileSystem: ConfigFileSystem;
 
   constructor() {
-    this.configDir = path.join(os.homedir(), '.unshallow');
-    this.configPath = path.join(this.configDir, 'config.json');
-    this.langfuseConfigPath = path.join(this.configDir, 'langfuse.json');
-    this.config = this.loadConfig();
+		this.configFileSystem = new ConfigFileSystem();
   }
 
   /**
-   * Get the OpenAI API key
+	 * Gets the OpenAI API key
    */
-  getOpenAIKey(): string | undefined {
-    // Check if key exists in config
-    if (this.config['openaiApiKey']) {
-      return this.config['openaiApiKey'];
+	async getOpenAIKey(): Promise<string | null> {
+		return this.configFileSystem.getOpenAIApiKey();
     }
 
-    // Check environment variable as fallback
-    if (process.env['OPENAI_API_KEY']) {
-      return process.env['OPENAI_API_KEY'];
-    }
-
-    return undefined;
+	/**
+	 * Sets the OpenAI API key
+	 */
+	async setOpenAIKey(key: string): Promise<void> {
+		await this.configFileSystem.setOpenAIApiKey(key);
   }
 
   /**
-   * Get the default context file path
-   */
-  getDefaultContextFilePath(): string {
-    return path.join(this.configDir, 'context.md');
+	 * Gets the Langfuse configuration
+	 */
+	async getLangfuseConfig(): Promise<LangfuseConfig | null> {
+		const config = await this.configFileSystem.getLangfuseConfig();
+		if (!config) return null;
+
+		// Convert from ConfigFileSystem's LangfuseConfig to our LangfuseConfig
+		return {
+			secretKey: config.secretKey,
+			publicKey: config.publicKey,
+			baseUrl: config.host,
+			host: config.host,
+			enabled: true,
+		};
   }
 
   /**
-   * Check if the default context file exists
+	 * Sets the Langfuse configuration
    */
-  hasDefaultContextFile(): boolean {
-    return fs.existsSync(this.getDefaultContextFilePath());
-  }
-
-  /**
-   * Set the OpenAI API key
-   */
-  setOpenAIKey(apiKey: string): void {
-    this.config['openaiApiKey'] = apiKey;
-    this.saveConfig();
-  }
-
-  /**
-   * Check if OpenAI API key is configured
-   */
-  hasOpenAIKey(): boolean {
-    return Boolean(this.getOpenAIKey());
-  }
-
-  /**
-   * Get Langfuse configuration
-   */
-  getLangfuseConfig(): LangfuseConfig | null {
-    try {
-      if (fs.existsSync(this.langfuseConfigPath)) {
-        const configContent = fs.readFileSync(this.langfuseConfigPath, 'utf8');
-        const config = JSON.parse(configContent);
-
-        // Ensure the config has all required fields
-        if (config.secretKey && config.publicKey && config.baseUrl) {
-          return {
+	async setLangfuseConfig(config: LangfuseConfig): Promise<void> {
+		// Convert from our LangfuseConfig to ConfigFileSystem's LangfuseConfig
+		await this.configFileSystem.setLangfuseConfig({
             secretKey: config.secretKey,
             publicKey: config.publicKey,
-            baseUrl: config.baseUrl,
-            enabled: config.enabled !== false // default to true if not specified
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Error loading Langfuse config:', error);
-    }
+			host: config.baseUrl || config.host,
+		});
+	}
 
-    return null;
+	/**
+	 * Gets the default context file path
+	 */
+	getDefaultContextFilePath(): string {
+		return this.configFileSystem.getContextFilePath();
   }
 
   /**
-   * Set Langfuse configuration
-   */
-  setLangfuseConfig(config: LangfuseConfig): void {
-    try {
-      // Ensure config directory exists
-      if (!fs.existsSync(this.configDir)) {
-        fs.mkdirSync(this.configDir, { recursive: true });
+	 * Gets the content of the context file
+	 */
+	async getDefaultContext(): Promise<string> {
+		return this.configFileSystem.getContextFile();
+	}
+
+	/**
+	 * Initializes the context file if it doesn't exist
+	 */
+	async initializeContextFile(): Promise<void> {
+		await this.configFileSystem.initializeContextFile();
       }
 
-      // Write config to file
-      fs.writeFileSync(this.langfuseConfigPath, JSON.stringify(config, null, 2));
+	/**
+	 * Check if the default context file exists
+	 */
+	async hasDefaultContextFile(): Promise<boolean> {
+		try {
+			await fs.access(this.getDefaultContextFilePath());
+			return true;
     } catch (error) {
-      console.error('Error saving Langfuse config:', error);
-    }
+			return false;
+		}
+	}
+
+	/**
+	 * Check if OpenAI API key is configured
+	 */
+	async hasOpenAIKey(): Promise<boolean> {
+		const key = await this.getOpenAIKey();
+		return Boolean(key);
   }
 
   /**
    * Check if Langfuse is configured
    */
-  hasLangfuseConfig(): boolean {
-    return this.getLangfuseConfig() !== null;
+	async hasLangfuseConfig(): Promise<boolean> {
+		const config = await this.getLangfuseConfig();
+		return config !== null;
   }
 
   /**
    * Enable or disable Langfuse logging
    */
-  setLangfuseEnabled(enabled: boolean): void {
-    const config = this.getLangfuseConfig();
+	async setLangfuseEnabled(enabled: boolean): Promise<void> {
+		const config = await this.getLangfuseConfig();
     if (config) {
       config.enabled = enabled;
-      this.setLangfuseConfig(config);
-    }
-  }
-
-  /**
-   * Load configuration from disk
-   */
-  private loadConfig(): Record<string, any> {
-    try {
-      // Ensure config directory exists
-      if (!fs.existsSync(this.configDir)) {
-        fs.mkdirSync(this.configDir, { recursive: true });
-      }
-
-      // Load config if it exists
-      if (fs.existsSync(this.configPath)) {
-        const configContent = fs.readFileSync(this.configPath, 'utf8');
-        return JSON.parse(configContent);
-      }
-    } catch (error) {
-      console.error('Error loading config:', error);
-    }
-
-    // Return empty config if file doesn't exist or error occurs
-    return {};
-  }
-
-  /**
-   * Save configuration to disk
-   */
-  private saveConfig(): void {
-    try {
-      // Ensure config directory exists
-      if (!fs.existsSync(this.configDir)) {
-        fs.mkdirSync(this.configDir, { recursive: true });
-      }
-
-      // Write config to file
-      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
-    } catch (error) {
-      console.error('Error saving config:', error);
+			await this.setLangfuseConfig(config);
     }
   }
 }
