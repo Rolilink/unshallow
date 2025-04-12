@@ -1,6 +1,20 @@
 # Todo for V0
+
+- Implement retry logic
+	- gherkin plan will be saved in the unshallow folder
+  - will look for ./unshallow folders.
+  - will start from the run test step and start fixing it
+  - if it failed on the lint or ts step will do as well
+  - requires `--retry` option
+- Add separation to user context file
+	- <plan> for the plan step
+	- <execution> for the execution steps (both migrate and fix)
+	- <error-analysis> for the error analysis step
+	- <ts> for the fix ts import step.
+	- <lint> for the fix lint step.
 - Implement multiple files support (via directory) and parallel execution
 - Implement meta report
+	- last error attempt will be saved in the unshallow folder
   - after running all the files it will collect summarize each log of the migration
     - then will sumarize each summary in look for patterns and repeated errors
     - it will provide and detailed .md summary with code examples
