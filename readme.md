@@ -191,46 +191,6 @@ Unshallow automatically creates a default context file at `~/.unshallow/context.
 $ open ~/.unshallow/context.md
 ```
 
-The context file follows this structure:
-
-```markdown
-# Additional Context for Test Conversion
-
-## Component Behavior
-
-Add information about specific component behaviors or quirks here.
-
-This file is read during migration and provided to the model as additional guidance. It's extremely valuable for:
-
-- Explaining project-specific conventions
-- Describing preferred mocking strategies
-- Specifying testing patterns to follow or avoid
-- Adding details about your component architecture
-- Providing guidance on handling edge cases
-
-Customizing this file can significantly improve migration quality for your specific codebase.
-
-## Migration Process
-
-When migrating a test, unshallow creates a temporary `.unshallow` folder in the same directory as the test file. This folder contains all the artifacts and logs generated during the migration process.
-
-### Folder Structure
-
-The `.unshallow` folder is organized as follows:
-
-```
-/path/to/test-directory/
-├── .unshallow/
-│   ├── ComponentName/          # Folder named after the component (not the test file)
-│   │   ├── logs.txt            # Detailed logs of the migration process
-│   │   ├── plan.txt            # Gherkin-style plan for the test conversion
-│   │   └── ComponentName.test.attempt.tsx  # Saved if migration fails
-```
-
-- The component folder is named after the component being tested, not the test file (e.g., `TodoApp` for `TodoApp.test.tsx`)
-- `logs.txt` contains detailed logs of the entire migration process
-- `plan.txt` contains the Gherkin-style plan generated for the test conversion
-- If migration fails, an `.attempt` file is created with the most recent conversion attempt
 
 ### How It Works
 
