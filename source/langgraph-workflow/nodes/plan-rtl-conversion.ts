@@ -63,8 +63,8 @@ export const planRtlConversionNode = async (
 		const response = await callOpenAIStructured({
 			prompt: formattedPrompt,
 			schema: PlanRtlConversionOutputSchema,
-			// Use o3-mini if reasoningPlanning is enabled
-			model: state.file.reasoningPlanning ? 'o3-mini' : 'gpt-4o-mini',
+			// Use o4-mini if reasoningPlanning is enabled
+			model: state.file.reasoningPlanning ? 'o4-mini' : 'gpt-4.1',
 			nodeName: 'plan_rtl_conversion',
 		});
 

@@ -361,7 +361,7 @@ function sleep(ms: number): Promise<void> {
 export async function callOpenAIStructured<T extends z.ZodType>({
   prompt,
   schema,
-  model = 'gpt-4o-mini',
+  model = 'gpt-4.1',
   temperature,
 	nodeName,
 }: {
@@ -411,9 +411,9 @@ Return ONLY the JSON object and nothing else.`;
       };
 
       // Only add temperature for models that support it
-      if (model !== 'o3-mini' && temperature !== undefined) {
+      if (model !== 'o4-mini' && temperature !== undefined) {
         llmOptions.temperature = temperature;
-      } else if (model !== 'o3-mini') {
+      } else if (model !== 'o4-mini') {
         // Use a lower default temperature for more predictable JSON outputs
         llmOptions.temperature = 0.0;
       }

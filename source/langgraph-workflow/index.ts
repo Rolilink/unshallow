@@ -65,7 +65,22 @@ graph
 			apply_context: 'apply_context',
 		},
 	)
-	.addEdge('apply_context', 'plan_rtl_conversion')
+	// Check if we should skip planning and execution in retry mode
+	.addConditionalEdges(
+		'apply_context',
+		state => {
+			// In retry mode with a valid temp file, skip to run_test
+			if (state.file.retryMode && state.file.rtlTest && state.file.tempPath) {
+				return 'run_test';
+			}
+			// Otherwise continue with normal planning
+			return 'plan_rtl_conversion';
+		},
+		{
+			run_test: 'run_test',
+			plan_rtl_conversion: 'plan_rtl_conversion',
+		},
+	)
 	.addConditionalEdges(
 		'plan_rtl_conversion',
 		state =>
@@ -233,6 +248,9 @@ export function createWorkflow(
 			reasoningPlanning: options?.reasoningPlanning || false,
 			reasoningExecution: options?.reasoningExecution || false,
 			reasoningReflection: options?.reasoningReflection || false,
+
+			// Set retry mode flag
+			retryMode: options?.retry || false,
 		},
 	};
 

@@ -99,14 +99,15 @@ program
 	)
 	.option(
 		'--reasoning',
-		'Use o3-mini model for planning, execution, and reflection steps (faster, less accurate)',
+		'Use o4-mini model for planning, execution, and reflection steps (faster, less accurate)',
 	)
-	.option('--reasoning-planning', 'Use o3-mini model for planning steps only')
-	.option('--reasoning-execution', 'Use o3-mini model for execution steps only')
+	.option('--reasoning-planning', 'Use o4-mini model for planning steps only')
+	.option('--reasoning-execution', 'Use o4-mini model for execution steps only')
 	.option(
 		'--reasoning-reflection',
-		'Use o3-mini model for reflection steps only',
+		'Use o4-mini model for reflection steps only',
 	)
+	.option('--retry', 'Retry from existing partial migration if available')
 	.option('--debug', 'Enable verbose debug output', false)
 	.action(async (inputPath, options) => {
 		console.log(

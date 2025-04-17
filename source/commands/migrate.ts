@@ -22,10 +22,11 @@ export interface MigrateOptions {
   lintFixCmd?: string;
   tsCheckCmd?: string;
   testCmd?: string;
-  reasoning?: boolean;            // Use o3-mini for planning, execution, and reflection
-  reasoningPlanning?: boolean;    // Use o3-mini for planning steps only
-  reasoningExecution?: boolean;   // Use o3-mini for execution steps only
-  reasoningReflection?: boolean;  // Use o3-mini for reflection steps only
+  reasoning?: boolean;            // Use o4-mini for planning, execution, and reflection
+  reasoningPlanning?: boolean;    // Use o4-mini for planning steps only
+  reasoningExecution?: boolean;   // Use o4-mini for execution steps only
+  reasoningReflection?: boolean;  // Use o4-mini for reflection steps only
+  retry?: boolean;                // Retry from existing partial migration
 }
 
 /**
@@ -106,7 +107,8 @@ Add common usage patterns for your components here.
       // If --reasoning is provided, enable all reasoning options
       reasoningPlanning: options.reasoning || options.reasoningPlanning || false,
       reasoningExecution: options.reasoning || options.reasoningExecution || false,
-      reasoningReflection: options.reasoning || options.reasoningReflection || false
+      reasoningReflection: options.reasoning || options.reasoningReflection || false,
+      retry: options.retry || false
     };
 
     // Log command execution
@@ -161,7 +163,8 @@ Add common usage patterns for your components here.
         // Pass only the specific reasoning flags
         reasoningPlanning: config.reasoningPlanning,
         reasoningExecution: config.reasoningExecution,
-        reasoningReflection: config.reasoningReflection
+        reasoningReflection: config.reasoningReflection,
+        retry: config.retry
       }
     );
 

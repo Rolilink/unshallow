@@ -60,8 +60,8 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
     const response = await callOpenAIStructured({
       prompt: formattedPrompt,
       schema: ExecuteRtlConversionOutputSchema,
-      // Use o3-mini if reasoningExecution is enabled
-      model: state.file.reasoningExecution ? 'o3-mini' : 'gpt-4o-mini',
+      // Use o4-mini if reasoningExecution is enabled
+      model: state.file.reasoningExecution ? 'o4-mini' : 'gpt-4.1',
       nodeName: 'execute_rtl_conversion'
     });
 

@@ -31,9 +31,12 @@ export interface WorkflowOptions {
   useFixLoop?: boolean;
 
   // Options to control which model is used in different parts of the workflow
-  reasoningPlanning?: boolean;    // Use o3-mini for planning steps only
-  reasoningExecution?: boolean;   // Use o3-mini for execution steps only
-  reasoningReflection?: boolean;  // Use o3-mini for reflection steps only
+  reasoningPlanning?: boolean;    // Use o4-mini for planning steps only
+  reasoningExecution?: boolean;   // Use o4-mini for execution steps only
+  reasoningReflection?: boolean;  // Use o4-mini for reflection steps only
+
+  // Retry mode
+  retry?: boolean;                // Retry from existing partial migration
 }
 
 /**
@@ -214,6 +217,9 @@ export interface FileState {
   testDir?: string;  // New property for the test-specific directory
   logsPath?: string;
   attemptPath?: string;
+
+  // Retry mode flag
+  retryMode?: boolean;
 }
 
 /**

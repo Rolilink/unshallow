@@ -2,6 +2,7 @@ import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
 import { formatComponentContext } from '../utils/format-context.js';
 import { NodeResult } from '../interfaces/node.js';
 import { logger } from '../utils/logging-callback.js';
+import { artifactFileSystem } from '../utils/filesystem.js';
 
 /**
  * Applies the context to the test file
@@ -37,6 +38,37 @@ export const applyContextNode = async (state: WorkflowState): Promise<NodeResult
     );
 
     await logger.success(NODE_NAME, `Context enriched successfully (${componentContext.length} characters)`);
+
+    // Check for retry mode and existing temp file
+    if (file.retryMode) {
+      if (artifactFileSystem.checkTempFileExists(file.path)) {
+        await logger.info(NODE_NAME, `Retry mode: Found existing temp file for test ${file.path}`);
+
+        try {
+          // Read temp file content using the specific method
+          const tempFileContent = await artifactFileSystem.readTempFile(file.path);
+          const tempFilePath = artifactFileSystem.createTempFilePath(file.path);
+
+          await logger.success(NODE_NAME, `Retry mode: Loaded existing RTL test content (${tempFileContent.length} characters)`);
+
+          // Return updated state with temp file content and path
+          return {
+            file: {
+              ...file,
+              componentContext,
+              rtlTest: tempFileContent,  // Set the RTL test content from temp file
+              tempPath: tempFilePath,    // Set the temp file path
+              currentStep: WorkflowStep.APPLY_CONTEXT,
+            },
+          };
+        } catch (error) {
+          await logger.error(NODE_NAME, `Retry mode: Error reading temp file`, error);
+          // Continue without retry data if file can't be read
+        }
+      } else {
+        await logger.info(NODE_NAME, `Retry mode: No existing temp file found for test ${file.path}`);
+      }
+    }
 
     // Update the file state with this context
     return {

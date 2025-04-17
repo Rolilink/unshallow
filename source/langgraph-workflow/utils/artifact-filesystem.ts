@@ -82,6 +82,90 @@ export class ArtifactFileSystem {
 	}
 
 	/**
+	 * Checks if a temporary file exists for the given test file
+	 * @param testFilePath The original test file path
+	 * @returns boolean indicating if the temp file exists
+	 */
+	public checkTempFileExists(testFilePath: string): boolean {
+		const tempFilePath = this.createTempFilePath(testFilePath);
+		return fsSync.existsSync(tempFilePath);
+	}
+
+	/**
+	 * Checks if a plan file exists for the given test file
+	 * @param testFilePath The original test file path
+	 * @returns boolean indicating if the plan file exists
+	 */
+	public checkPlanFileExists(testFilePath: string): boolean {
+		const testDir = this.getTestDirectory(testFilePath);
+		const planFilePath = path.join(testDir, 'plan.txt');
+
+		return fsSync.existsSync(planFilePath);
+	}
+
+	/**
+	 * Reads the content of a temporary file for the given test file
+	 * @param testFilePath The original test file path
+	 * @returns The content of the temp file
+	 */
+	public async readTempFile(testFilePath: string): Promise<string> {
+		const tempFilePath = this.createTempFilePath(testFilePath);
+
+		try {
+			if (!fsSync.existsSync(tempFilePath)) {
+				throw new Error(`Temp file does not exist for test: ${testFilePath}`);
+			}
+			return await fs.readFile(tempFilePath, 'utf8');
+		} catch (error) {
+			console.error(
+				`Error reading temp file for ${testFilePath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Reads the content of a plan file for the given test file
+	 * @param testFilePath The original test file path
+	 * @returns The content of the plan file
+	 */
+	public async readPlanFile(testFilePath: string): Promise<string> {
+		const testDir = this.getTestDirectory(testFilePath);
+		const planFilePath = path.join(testDir, 'plan.txt');
+
+		try {
+			if (!fsSync.existsSync(planFilePath)) {
+				throw new Error(`Plan file does not exist for test: ${testFilePath}`);
+			}
+			return await fs.readFile(planFilePath, 'utf8');
+		} catch (error) {
+			console.error(
+				`Error reading plan file for ${testFilePath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Gets the path to the test directory for a component
+	 * @param testFilePath The original test file path
+	 * @returns The path to the component's test directory
+	 */
+	public getTestDirectory(testFilePath: string): string {
+		const folderDir = path.dirname(testFilePath);
+		const fileNameWithoutExt = path.basename(
+			testFilePath,
+			path.extname(testFilePath)
+		);
+		const componentName = fileNameWithoutExt.replace(/\.(test|spec)$/, '');
+		return path.join(folderDir, '.unshallow', componentName);
+	}
+
+	/**
 	 * Initializes the logs file, clearing any previous content
 	 */
 	async initializeLogsFile(testDir: string): Promise<string> {
