@@ -21,6 +21,9 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
 
   await logger.logNodeStart(NODE_NAME, `Fixing lint errors (attempt #${nextLintAttempt}): ${file.path}`);
 
+  // Add progress logging
+  await logger.progress(file.path, `Lint fixing: attempting to fix ESLint errors`, file.retries);
+
   try {
     if (!file.lintCheck) {
       throw new Error('Lint check result is required but missing');
@@ -39,6 +42,10 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     // Get the lint errors from the check result
     const lintErrors = file.lintCheck.output || file.lintCheck.errors?.join('\n') || 'Unknown lint errors';
     await logger.info(NODE_NAME, `Lint errors detected`);
+
+    // Add progress logging with error count
+    const errorCount = file.lintCheck.errors?.length || 0;
+    await logger.progress(file.path, `Lint fixing: ${errorCount} ESLint errors`, file.retries);
 
     // Log all errors being fixed
     await logger.logErrors(NODE_NAME, lintErrors, "Lint errors being fixed");
@@ -113,6 +120,9 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     };
 
     await logger.success(NODE_NAME, `Applied lint fixes (attempt #${nextLintAttempt})`);
+
+    // Add progress logging for completion
+    await logger.progress(file.path, `Lint fix applied, ready for validation`, file.retries);
 
     return {
       file: {

@@ -17,6 +17,9 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
 
   await logger.logNodeStart(NODE_NAME, `Fixing TypeScript error for ${file.path}`);
 
+  // Add progress logging
+  await logger.progress(file.path, `TS fixing: attempting to fix TypeScript errors`, file.retries);
+
   try {
     if (!file.tsCheck) {
       throw new Error('TypeScript check result is required but missing');
@@ -35,6 +38,10 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
     // Get the TypeScript errors from the check result
     const tsErrors = file.tsCheck.errors?.join('\n') || 'Unknown TypeScript errors';
     await logger.info(NODE_NAME, `TypeScript errors detected: ${tsErrors}`);
+
+    // Add progress logging with error count
+    const errorCount = file.tsCheck.errors?.length || 0;
+    await logger.progress(file.path, `TS fixing: ${errorCount} TypeScript errors`, file.retries);
 
     // Initialize the fix history if not present
     const tsFixHistory = file.tsFixHistory || [];
@@ -108,6 +115,9 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
     };
 
     await logger.success(NODE_NAME, 'Applied TypeScript fixes');
+
+    // Add progress logging for completion
+    await logger.progress(file.path, `TS fix applied, ready for validation`, file.retries);
 
     return {
       file: {

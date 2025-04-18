@@ -22,6 +22,9 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
   const errorName = file.currentError ? file.currentError.testName : 'unknown';
   await logger.logNodeStart(NODE_NAME, `Analyzing failure for: ${errorName}`);
 
+  // Add progress logging
+  await logger.progress(file.path, `Analyzing test failure: ${errorName}`, file.retries);
+
   try {
     // Check if there's a current error to analyze
     if (!file.currentError) {
@@ -67,6 +70,9 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
     await logger.info(NODE_NAME, `Generated fix intent: ${response.fixIntent}`);
     await logger.info(NODE_NAME, `Explanation: ${response.explanation}`);
     await logger.success(NODE_NAME, `Analysis complete`);
+
+    // Add progress logging for completion
+    await logger.progress(file.path, `Analysis complete: ${response.fixIntent.substring(0, 50)}${response.fixIntent.length > 50 ? '...' : ''}`, file.retries);
 
     // Return the updated state with the analysis
     return {

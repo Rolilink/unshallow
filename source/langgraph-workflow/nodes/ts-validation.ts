@@ -22,6 +22,9 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
 
   await logger.logNodeStart(NODE_NAME, `Validating TypeScript (attempt #${attemptNumber}): ${file.path}`);
 
+  // Add progress logging
+  await logger.progress(file.path, `TypeScript validation`, file.retries);
+
   // Skip if configured to skip TS validation
   if (file.skipTs) {
     await logger.info(NODE_NAME, `Skipped (skipTs enabled)`);
@@ -86,6 +89,9 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
       // Log all errors
       await logger.logErrors(NODE_NAME, errors, "TypeScript errors");
 
+      // Add progress logging for TS errors
+      await logger.progress(file.path, `TypeScript validation failed with ${errors.length} errors`, file.retries);
+
       return {
         file: {
           ...file,
@@ -99,6 +105,9 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
     }
 
     await logger.success(NODE_NAME, `TypeScript validation passed`);
+
+    // Add progress logging for TS success
+    await logger.progress(file.path, `TypeScript validation passed`, file.retries);
 
     // TS validation succeeded
     return {

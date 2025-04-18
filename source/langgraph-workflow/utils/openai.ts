@@ -1,8 +1,9 @@
 import {ChatOpenAI} from '@langchain/openai';
-import {langfuseCallbackHandler} from '../../langfuse.js';
+import {getLangfuseCallbackHandler} from '../../langfuse.js';
 import {ConfigManager} from '../../config/config-manager.js';
 import {StructuredOutputParser} from 'langchain/output_parsers';
 import {z} from 'zod';
+import {logger} from './logging-callback.js';
 
 /**
  * Get the OpenAI API key from config manager or environment
@@ -20,7 +21,7 @@ async function getApiKey(): Promise<string> {
 
   return apiKey;
 	} catch (error) {
-		console.error('Error getting OpenAI API key:', error);
+		logger.error('openai', 'Error getting OpenAI API key:', error);
 		throw error;
 	}
 }
@@ -169,7 +170,7 @@ function cleanMarkdownCodeBlocks(content: string): string {
     // Remove the closing code block marker
     cleanContent = cleanContent.replace(/```\s*$/m, '');
 
-    console.log('Stripped markdown code block from response');
+    logger.info('openai', 'Stripped markdown code block from response');
   }
 
   return cleanContent;
@@ -185,10 +186,10 @@ function preprocessJsonContent(content: string): string {
     JSON.parse(content);
     return content; // If no error, return as is
   } catch (error) {
-    console.log('JSON parsing failed, attempting to preprocess content...');
-		console.log(
-			'Error:',
-			error instanceof Error ? error.message : String(error),
+    logger.info('openai', 'JSON parsing failed, attempting to preprocess content...');
+		logger.info(
+			'openai',
+			'Error: ' + (error instanceof Error ? error.message : String(error))
 		);
 
     // Regex-based preprocessing for common issues
@@ -263,7 +264,7 @@ function preprocessJsonContent(content: string): string {
     // This is a simple fix, not comprehensive
     const openQuotes = (processed.match(/"/g) || []).length;
     if (openQuotes % 2 !== 0) {
-      console.log('Detected unbalanced quotes, attempting basic fix');
+      logger.info('openai', 'Detected unbalanced quotes, attempting basic fix');
       // Find object boundaries to fix
       processed = processed.replace(/\{([^{}]*)\}/g, (_match, content) => {
         const fixedContent = content.replace(/(?<!\\)"/g, (q, index, str) => {
@@ -277,19 +278,18 @@ function preprocessJsonContent(content: string): string {
       });
     }
 
-    console.log('Preprocessing complete, attempting to parse JSON again');
+    logger.info('openai', 'Preprocessing complete, attempting to parse JSON again');
 
     // Verify if preprocessing fixed the issue
     try {
       JSON.parse(processed);
-      console.log('Preprocessing successfully fixed JSON issues');
+      logger.info('openai', 'Preprocessing successfully fixed JSON issues');
       return processed;
     } catch (secondError) {
-			console.warn(
+			logger.error(
+				'openai',
 				'Preprocessing could not fully fix JSON issues:',
-				secondError instanceof Error
-					? secondError.message
-					: String(secondError),
+				secondError
 			);
 
       // Last resort: Try to handle the case with regex pattern that specifically targets the position referenced in the error
@@ -298,15 +298,16 @@ function preprocessJsonContent(content: string): string {
         const positionMatch = errorMessage.match(/position (\d+)/);
         if (positionMatch && positionMatch[1]) {
           const position = parseInt(positionMatch[1], 10);
-					console.log(
-						`Attempting to fix JSON at specific position ${position}`,
+					logger.info(
+						'openai',
+						`Attempting to fix JSON at specific position ${position}`
 					);
 
           // Create a buffer around the error position
           const start = Math.max(0, position - 20);
           const end = Math.min(processed.length, position + 20);
           const snippet = processed.substring(start, end);
-          console.log(`Issue near: "${snippet}"`);
+          logger.info('openai', `Issue near: "${snippet}"`);
 
           // Apply targeted fix for single quotes in test names which is a common issue
 					processed =
@@ -316,10 +317,10 @@ function preprocessJsonContent(content: string): string {
           // Try parsing one more time
           try {
             JSON.parse(processed);
-            console.log('Last-resort position-specific fix worked!');
+            logger.info('openai', 'Last-resort position-specific fix worked!');
             return processed;
           } catch (finalError) {
-            console.warn('All preprocessing attempts failed');
+            logger.error('openai', 'All preprocessing attempts failed');
           }
         }
       }
@@ -341,7 +342,7 @@ function postProcessParsedOutput<T>(parsedOutput: T): T {
     const output = parsedOutput as any;
     // Replace escaped newlines with actual newlines
     output.plan = output.plan.replace(/\\n/g, '\n');
-    console.log('Plan with unescaped newlines:', output.plan);
+    logger.info('openai', 'Plan with unescaped newlines: ' + output.plan);
   }
 
   return parsedOutput;
@@ -395,18 +396,22 @@ IMPORTANT FORMATTING REQUIREMENTS:
 8. Inside the it and describe block, do not use single quotes. example: incorrect: it('adds \'Milk\' to the list') correct: it(\"adds 'todo' to the list\")
 Return ONLY the JSON object and nothing else.`;
 
+  // Get the Langfuse callback handler
+  const langfuseCallbackHandler = await getLangfuseCallbackHandler();
+
   // Retry loop
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-			console.log(
-				`Attempt ${attempt}/${MAX_RETRIES} to call OpenAI structured API`,
+			logger.info(
+				'openai',
+				`Attempt ${attempt}/${MAX_RETRIES} to call OpenAI structured API`
 			);
 
       // Configure the LLM with appropriate options for the model
       const llmOptions: any = {
         modelName: model,
 				openAIApiKey: await getApiKey(),
-        callbacks: [langfuseCallbackHandler],
+        callbacks: langfuseCallbackHandler ? [langfuseCallbackHandler] : [],
 				response_format: {type: 'json_object'},
       };
 
@@ -439,7 +444,7 @@ Return ONLY the JSON object and nothing else.`;
 
       // Parse the response manually
       const content = result.content.toString();
-      console.log('Received response, parsing structured output...');
+      logger.info('openai', 'Received response, parsing structured output...');
 
       // Clean markdown code blocks
       const cleanContent = cleanMarkdownCodeBlocks(content);
@@ -450,34 +455,36 @@ Return ONLY the JSON object and nothing else.`;
       // Parse the response with the parser
       try {
         const parsedOutput = await parser.parse(preprocessedContent);
-        console.log('Structured response successfully parsed');
+        logger.info('openai', 'Structured response successfully parsed');
 
         // Post-process the output
         return postProcessParsedOutput(parsedOutput);
       } catch (parseError) {
         // If JSON parsing still fails, log and throw to trigger retry
-				console.error(
+				logger.error(
+					'openai',
 					'JSON parsing failed after preprocessing:',
-					parseError instanceof Error ? parseError.message : String(parseError),
+					parseError
 				);
         throw parseError;
       }
     } catch (error) {
       // If this is the last attempt, throw the error
       if (attempt === MAX_RETRIES) {
-        console.error(`All ${MAX_RETRIES} attempts failed:`, error);
+        logger.error('openai', `All ${MAX_RETRIES} attempts failed:`, error);
         throw error;
       }
 
       // Log the error for this attempt
-			console.error(
+			logger.error(
+				'openai',
 				`Attempt ${attempt} failed:`,
-				error instanceof Error ? error.message : String(error),
+				error
 			);
 
       // Calculate exponential backoff delay
       const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-      console.log(`Retrying in ${delayMs}ms...`);
+      logger.info('openai', `Retrying in ${delayMs}ms...`);
 
       // Wait before the next attempt with exponential backoff
       await sleep(delayMs);
@@ -496,12 +503,15 @@ export async function callOpenAI(
 	nodeName?: string,
 ): Promise<string> {
   try {
+    // Get the Langfuse callback handler
+    const langfuseCallbackHandler = await getLangfuseCallbackHandler();
+
     // Configure the LLM
     const llm = new ChatOpenAI({
       temperature: 0.2,
       modelName: 'gpt-4o-mini',
 			openAIApiKey: await getApiKey(),
-      callbacks: [langfuseCallbackHandler],
+      callbacks: langfuseCallbackHandler ? [langfuseCallbackHandler] : [],
     });
 
     // Add tags if nodeName is provided
@@ -518,7 +528,7 @@ export async function callOpenAI(
 			{tags},
 		);
 
-    console.log('Raw response received from OpenAI');
+    logger.info('openai', 'Raw response received from OpenAI');
 
     // Extract the content
     let content = result.content.toString();
@@ -537,11 +547,11 @@ export async function callOpenAI(
       content = content.replace(/```(?:.*?)?\n([\s\S]*)\n```$/g, '$1').trim();
     }
 
-    console.log('Response processed (removed markdown code blocks)');
+    logger.info('openai', 'Response processed (removed markdown code blocks)');
 
     return content;
   } catch (error) {
-    console.error('Error in OpenAI raw response:', error);
+    logger.error('openai', 'Error in OpenAI raw response:', error);
     throw error;
   }
 }

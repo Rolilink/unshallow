@@ -8,6 +8,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ConfigManager } from '../config/config-manager.js';
 import * as fsSync from 'fs';
+import { discoverTestFiles } from '../discovery/test-file-discovery.js';
+import { ParallelMigrationManager } from '../discovery/parallel-migration.js';
 
 // Type definition for command options
 export interface MigrateOptions {
@@ -27,19 +29,21 @@ export interface MigrateOptions {
   reasoningExecution?: boolean;   // Use o4-mini for execution steps only
   reasoningReflection?: boolean;  // Use o4-mini for reflection steps only
   retry?: boolean;                // Retry from existing partial migration
+
+  // New options for parallel migration
+  concurrency?: number;           // Number of files to process in parallel
+  recursive?: boolean;            // Whether to search subdirectories
+  silent?: boolean;               // Whether to suppress console output
 }
 
 /**
- * Handles the migrate command for a single file
+ * Handles the migrate command
  */
 export async function handleMigrateCommand(
-  inputPath: string,
+  inputPaths: string[],
   options: MigrateOptions
 ): Promise<number> {
   try {
-    // Get project root (current working directory)
-    const projectRoot = process.cwd();
-
     // Get API key from config or command line
     const configManager = new ConfigManager();
     const apiKey = configManager.getOpenAIKey();
@@ -89,6 +93,146 @@ Add common usage patterns for your components here.
       console.log(`Created default context file at: ${contextFilePath}`);
     }
 
+    // Check if we're dealing with multiple files or directories
+    if (inputPaths.length === 0) {
+      console.error('No input paths provided');
+      return 1;
+    }
+
+    // At this point, we know inputPaths[0] exists
+    const firstPath = inputPaths[0];
+    // TypeScript needs this extra check
+    if (typeof firstPath !== 'string') {
+      console.error('Input path is not a string');
+      return 1;
+    }
+
+    const isMultipleFiles = inputPaths.length > 1 || await isDirectory(firstPath);
+
+    if (isMultipleFiles) {
+      // Process multiple files in parallel
+      return await handleMultipleFiles(inputPaths, options);
+    } else {
+      // Process a single file (original behavior)
+      return await handleSingleFile(firstPath, options);
+    }
+  } catch (error) {
+    console.error('Migration command failed', error);
+    return 1;
+  }
+}
+
+/**
+ * Handle migration of multiple files in parallel
+ */
+async function handleMultipleFiles(
+  inputPaths: string[],
+  options: MigrateOptions
+): Promise<number> {
+  try {
+    console.log('Discovering test files...');
+
+    // Find all test files
+    const files = await discoverTestFiles(inputPaths, {
+      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx,js,jsx}',
+      recursive: options.recursive !== false, // Default to true
+      retry: options.retry || false
+    });
+
+    if (files.length === 0) {
+      console.error('No Enzyme test files found matching criteria');
+      return 1;
+    }
+
+    console.log(`Found ${files.length} Enzyme test files to migrate`);
+
+    if (options.retry) {
+      const filesWithTemp = files.filter(f => f.hasTempFile).length;
+      if (filesWithTemp > 0) {
+        console.log(`${filesWithTemp} file(s) have existing state and will use retry mode`);
+      }
+    }
+
+    // Create and run parallel manager
+    const concurrency = options.concurrency || 5;
+    console.log(`Starting parallel migration with concurrency: ${concurrency}`);
+
+    const manager = new ParallelMigrationManager(files, options);
+    const summary = await manager.runAll();
+
+    // Format duration as minutes and seconds
+    const durationFormatted = formatDuration(summary.totalDuration);
+
+    // Display final report
+    console.log('\nMigration Summary:');
+    console.log(`Total files: ${summary.totalFiles}`);
+    console.log(`Successful: ${summary.successful}`);
+    console.log(`Failed: ${summary.failed}`);
+    console.log(`Total duration: ${durationFormatted}`);
+
+    // Calculate and display retry statistics
+    const totalRetries = {
+      rtl: 0,
+      test: 0,
+      ts: 0,
+      lint: 0,
+      total: 0
+    };
+
+    summary.results.forEach(result => {
+      if (result.retries) {
+        totalRetries.rtl += result.retries.rtl;
+        totalRetries.test += result.retries.test;
+        totalRetries.ts += result.retries.ts;
+        totalRetries.lint += result.retries.lint;
+        totalRetries.total += result.retries.total;
+      }
+    });
+
+    console.log('\nRetry Statistics:');
+    console.log(`Total retries: ${totalRetries.total}`);
+    console.log(`RTL fixes: ${totalRetries.rtl}`);
+    console.log(`Test fixes: ${totalRetries.test}`);
+    console.log(`TypeScript fixes: ${totalRetries.ts}`);
+    console.log(`Lint fixes: ${totalRetries.lint}`);
+
+    // Average retries per file
+    const avgRetries = totalRetries.total / summary.totalFiles;
+    console.log(`Average retries per file: ${avgRetries.toFixed(2)}`);
+
+    // List failed files if any
+    if (summary.failed > 0) {
+      console.log('\nFailed migrations:');
+      summary.results
+        .filter(r => !r.success)
+        .forEach(r => {
+          const retryInfo = r.retries
+            ? `[Retries: ${r.retries.total} | RTL: ${r.retries.rtl}, Test: ${r.retries.test}, TS: ${r.retries.ts}, Lint: ${r.retries.lint}]`
+            : '';
+          console.log(`- ${r.relativePath} ${retryInfo}`);
+          if (r.errorStep) console.log(`  Failed at: ${r.errorStep}`);
+          if (r.error) console.log(`  Error: ${r.error.message}`);
+        });
+    }
+
+    return summary.failed > 0 ? 1 : 0;
+  } catch (error) {
+    console.error('Error running parallel migration:', error);
+    return 1;
+  }
+}
+
+/**
+ * Handle migration of a single file (original behavior)
+ */
+async function handleSingleFile(
+  inputPath: string,
+  options: MigrateOptions
+): Promise<number> {
+  try {
+    // Get project root
+    const projectRoot = process.cwd();
+
     // Configure options for migration
     const config = {
       skipTs: options.skipTsCheck || false,
@@ -118,7 +262,7 @@ Add common usage patterns for your components here.
     // Verify the file exists
     const stats = await fs.stat(inputPath);
     if (!stats.isFile()) {
-      console.error('Input path must be a file (directory support coming soon)');
+      console.error('Input path must be a file');
       return 1;
     }
 
@@ -190,4 +334,27 @@ Add common usage patterns for your components here.
     console.error('Migration command failed', error);
     return 1;
   }
+}
+
+/**
+ * Check if a path is a directory
+ */
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    const stats = await fs.stat(path);
+    return stats.isDirectory();
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Format duration in milliseconds to minutes and seconds
+ */
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${minutes}m ${remainingSeconds}s`;
 }

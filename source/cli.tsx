@@ -60,14 +60,13 @@ program
 
 // Add the migrate command
 program
-	.command('migrate')
+	.command('migrate <paths...>')
 	.description('Migrate Enzyme test files to React Testing Library')
-	.argument('<path>', 'File or directory to migrate from Enzyme to RTL')
 	.option('--skip-ts-check', 'Skip TypeScript checking')
 	.option('--skip-lint-check', 'Skip ESLint checking')
 	.option('--skip-test-run', 'Skip running the test')
 	.option('--max-retries <number>', 'Maximum LLM retries', '20')
-	.option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx}')
+	.option('--pattern <glob>', 'Test file pattern', '**/*.{test,spec}.{ts,tsx,js,jsx}')
 	.option('--import-depth <number>', 'Depth for AST import analysis', '1')
 	.option(
 		'--examples <paths>',
@@ -108,13 +107,15 @@ program
 		'Use o4-mini model for reflection steps only',
 	)
 	.option('--retry', 'Retry from existing partial migration if available')
+	.option('--concurrency <number>', 'Number of migrations to run in parallel', '5')
+	.option('--no-recursive', 'Don\'t search subdirectories for test files')
 	.option('--debug', 'Enable verbose debug output', false)
-	.action(async (inputPath, options) => {
+	.action(async (inputPaths, options) => {
 		console.log(
 			'Starting migration with options:',
 			JSON.stringify(options, null, 2),
 		);
-		const exitCode = await handleMigrateCommand(inputPath, options);
+		const exitCode = await handleMigrateCommand(inputPaths, options);
 		process.exit(exitCode);
 	});
 

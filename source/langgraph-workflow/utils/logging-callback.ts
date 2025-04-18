@@ -8,6 +8,7 @@ export class Logger {
 	private logsPath: string | null = null;
 	private attemptCounter: Map<string, number> = new Map();
 	private artifactFileSystem: ArtifactFileSystem;
+	private silent: boolean = false;
 
 	constructor() {
 		this.artifactFileSystem = new ArtifactFileSystem();
@@ -19,6 +20,14 @@ export class Logger {
 	 */
 	setLogsPath(logsPath: string): void {
 		this.logsPath = logsPath;
+	}
+
+	/**
+	 * Enable or disable console output
+	 * @param silent Whether to suppress console output
+	 */
+	setSilent(silent: boolean): void {
+		this.silent = silent;
 	}
 
 	/**
@@ -53,12 +62,62 @@ export class Logger {
 	}
 
 	/**
+	 * Log progress information - always displays even in silent mode
+	 * Used to show the current file state and retry counts during processing
+	 * @param filePath The path of the file being processed
+	 * @param state The current state (migrating, testing, fixing, etc.)
+	 * @param retries Current retry information for the different stages
+	 */
+	async progress(filePath: string, state: string, retries?: { rtl: number; test: number; ts: number; lint: number }): Promise<void> {
+		// Get just the filename for display
+		const fileName = filePath.split('/').pop() || filePath;
+
+		// Format retry counts if provided
+		let retryInfo = '';
+		if (retries) {
+			const totalRetries = retries.rtl + retries.test + retries.ts + retries.lint;
+			retryInfo = ` [Retries: ${totalRetries} | RTL: ${retries.rtl}, Test: ${retries.test}, TS: ${retries.ts}, Lint: ${retries.lint}]`;
+		}
+
+		// Format attempt info if applicable
+		let attemptInfo = '';
+		if (state.includes('fixing') && state.includes(':')) {
+			const parts = state.split(':');
+			const stageType = parts[0]?.trim(); // e.g., "RTL fixing"
+			const operationType = stageType?.toLowerCase().replace(' ', '_'); // Convert to operation type
+			const attemptNum = this.getAttemptCount(operationType || '');
+			attemptInfo = ` (Attempt #${attemptNum})`;
+			state = `${stageType}${attemptInfo}: ${parts[1]}`;
+		}
+
+		// Create progress message - always shown regardless of silent mode
+		const message = `[Progress] ${fileName} - ${state}${retryInfo}`;
+
+		// Always log to console regardless of silent setting
+		console.log(message);
+
+		// Also log to file if available
+		if (this.logsPath) {
+			try {
+				await this.artifactFileSystem.appendToLogsFile(
+					this.logsPath,
+					`${new Date().toISOString()} ${message}\n`
+				);
+			} catch (error) {
+				// Silent error handling for log file errors
+			}
+		}
+	}
+
+	/**
 	 * Write a message to both console and log file
 	 * @param message The message to log
 	 */
 	private async write(message: string): Promise<void> {
-		// Print to console - consider formatting for readability
-		console.log(message);
+		// Print to console if not in silent mode
+		if (!this.silent) {
+			console.log(message);
+		}
 
 		// Write to logs file if available
 		if (this.logsPath) {
@@ -66,11 +125,13 @@ export class Logger {
 				// Use ArtifactFileSystem to append to log
 				await this.artifactFileSystem.appendToLogsFile(this.logsPath, message);
 			} catch (error) {
-				console.error(
-					`Error writing to log file: ${
-						error instanceof Error ? error.message : String(error)
-					}`,
-				);
+				if (!this.silent) {
+					console.error(
+						`Error writing to log file: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					);
+				}
 			}
 		}
 	}

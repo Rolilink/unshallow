@@ -29,6 +29,9 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
 
   await logger.logNodeStart(NODE_NAME, `Running test (attempt #${attemptNumber}): ${file.path}`);
 
+  // Add progress logging
+  await logger.progress(file.path, `Running test`, file.retries);
+
   // Skip if configured to skip tests
   if (file.skipTest) {
     await logger.info(NODE_NAME, `Skipped (skipTest enabled)`);
@@ -108,6 +111,8 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
     // Return the updated state with the test result
     if (testResult.success) {
       await logger.success(NODE_NAME, `Test passed successfully (attempt #${attemptNumber})`);
+      // Add progress logging for test success
+      await logger.progress(file.path, `Test passed successfully`, file.retries);
       return {
         file: {
           ...updatedFile,
@@ -118,6 +123,8 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
       };
     } else {
       await logger.error(NODE_NAME, `Test failed (attempt #${attemptNumber})`);
+      // Add progress logging for test failure
+      await logger.progress(file.path, `Test failed - needs fixing`, file.retries);
       return {
         file: {
           ...updatedFile,

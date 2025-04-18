@@ -37,6 +37,9 @@ export interface WorkflowOptions {
 
   // Retry mode
   retry?: boolean;                // Retry from existing partial migration
+
+  // Silent mode
+  silent?: boolean;               // Suppress console output from logger
 }
 
 /**

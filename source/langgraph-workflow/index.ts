@@ -24,8 +24,13 @@ import {
 	hasLintCheckPassed,
 	hasExceededRetries,
 } from './edges.js';
-import {Annotation, END, START, StateGraph} from '@langchain/langgraph';
-import {langfuseCallbackHandler} from '../langfuse.js';
+import {
+	Annotation,
+	END,
+	START,
+	StateGraph,
+} from '@langchain/langgraph';
+import {getLangfuseCallbackHandler} from '../langfuse.js';
 import {logger} from './utils/logging-callback.js';
 import {TestFileSystem} from './utils/test-filesystem.js';
 import {ArtifactFileSystem} from './utils/artifact-filesystem.js';
@@ -141,7 +146,7 @@ graph
 			}
 
 			// Fallback - should not happen
-			console.log('Unexpected state in analyze_test_errors condition');
+			logger.info('workflow', 'Unexpected state in analyze_test_errors condition');
 			return 'validate_typescript';
 		},
 		{
@@ -204,7 +209,7 @@ export function createWorkflow(
 	context: EnrichedContext,
 	options: WorkflowOptions = {},
 ): {initialState: WorkflowState; execute: () => Promise<WorkflowState>} {
-	const maxRetries = options.maxRetries || 20;
+	const maxRetries = options.maxRetries || 8;
 
 	// Initial file state
 	const initialState: WorkflowState = {
@@ -259,14 +264,31 @@ export function createWorkflow(
 	 */
 	const execute = async (): Promise<WorkflowState> => {
 		try {
+			// Get the Langfuse callback handler
+			const langfuseCallbackHandler = await getLangfuseCallbackHandler();
+
+			// Log initial progress
+			logger.progress(testFilePath, 'Starting migration');
+
 			// Execute the graph with the initial state
 			const result = await enzymeToRtlConverterGraph.invoke(initialState, {
-				callbacks: [langfuseCallbackHandler],
+				callbacks: langfuseCallbackHandler ? [langfuseCallbackHandler] : [],
 				recursionLimit: 200,
 			});
+
+			// Log final progress
+			logger.progress(testFilePath,
+				`Migration ${result.file.status === 'success' ? 'succeeded' : 'failed'}`,
+				result.file.retries
+			);
+
 			return result as WorkflowState;
 		} catch (error) {
-			console.error(`Error in workflow execution:`, error);
+			logger.error('workflow', 'Error in workflow execution:', error);
+
+			// Log error progress
+			logger.progress(testFilePath, 'Migration failed with error');
+
 			return {
 				file: {
 					...initialState.file,
@@ -303,6 +325,11 @@ export async function processSingleFile(
 
 	// Configure the logger with the logs file path
 	logger.setLogsPath(logsPath);
+
+	// Set logger silent mode if specified
+	if (options.silent) {
+		logger.setSilent(true);
+	}
 
 	logger.info('workflow', `Starting migration for ${testFilePath}`);
 

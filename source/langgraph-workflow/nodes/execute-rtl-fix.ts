@@ -27,6 +27,9 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
   const errorName = file.currentError ? file.currentError.testName : 'unknown';
   await logger.logNodeStart(NODE_NAME, `Executing fix (attempt #${attemptNumber} for error ${errorName})`);
 
+  // Add progress logging
+  await logger.progress(file.path, `RTL fixing: ${errorName}`, file.retries);
+
   try {
     // Check if there's a current error to fix
     if (!file.currentError) {
@@ -95,6 +98,9 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
     await fs.writeFile(tempFile, response.updatedTestFile);
 
     await logger.success(NODE_NAME, `Fix executed, ready to run updated test`);
+
+    // Add progress logging for completion
+    await logger.progress(file.path, `RTL fix applied, ready to run test`, file.retries);
 
     // Return the updated state with the fixed test
     return {

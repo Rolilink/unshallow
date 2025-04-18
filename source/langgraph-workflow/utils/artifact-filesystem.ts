@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
+import {logger} from './logging-callback.js';
 
 /**
  * Log entry type
@@ -19,10 +20,11 @@ export class ArtifactFileSystem {
 		try {
 			if (!fsSync.existsSync(directoryPath)) {
 				await fs.mkdir(directoryPath, {recursive: true});
-				console.log(`Created directory: ${directoryPath}`);
+				logger.info('artifacts', `Created directory: ${directoryPath}`);
 			}
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error creating directory ${directoryPath}: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -47,7 +49,8 @@ export class ArtifactFileSystem {
 				await fs.writeFile(filePath, defaultContent, 'utf8');
 			}
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error ensuring file exists ${filePath}: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -65,7 +68,8 @@ export class ArtifactFileSystem {
 			await this.ensureDirectoryExists(directoryPath);
 			await fs.writeFile(filePath, content, 'utf8');
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error writing file ${filePath}: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -117,7 +121,8 @@ export class ArtifactFileSystem {
 			}
 			return await fs.readFile(tempFilePath, 'utf8');
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error reading temp file for ${testFilePath}: ${
 					error instanceof Error ? error.message : String(error)
 				}`
@@ -141,7 +146,8 @@ export class ArtifactFileSystem {
 			}
 			return await fs.readFile(planFilePath, 'utf8');
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error reading plan file for ${testFilePath}: ${
 					error instanceof Error ? error.message : String(error)
 				}`
@@ -220,7 +226,8 @@ export class ArtifactFileSystem {
 			await this.ensureFileExists(logsPath);
 			await fs.appendFile(logsPath, formattedMessage);
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error appending to logs file: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -239,14 +246,15 @@ export class ArtifactFileSystem {
 
 			// Verify file was created
 			if (this.fileExists(planPath)) {
-				console.log(`Successfully saved plan to: ${planPath}`);
+				logger.info('artifacts', `Successfully saved plan to: ${planPath}`);
 			} else {
-				console.error(`Plan file not created at: ${planPath}`);
+				logger.error('artifacts', `Plan file not created at: ${planPath}`);
 			}
 
 			return planPath;
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error saving plan file: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -278,7 +286,8 @@ export class ArtifactFileSystem {
 			await this.writeFile(attemptPath, content);
 			return attemptPath;
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error saving attempt file: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -310,7 +319,8 @@ export class ArtifactFileSystem {
 				await fs.unlink(tempPath);
 			}
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error cleaning up temporary file: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
@@ -337,11 +347,13 @@ export class ArtifactFileSystem {
 			await this.cleanupTempFile(tempPath);
 
 			// Log completion
-			console.log(
+			logger.info(
+				'artifacts',
 				`Successfully migrated ${originalFilePath} (temp file: ${tempPath}, test dir: ${testDir})`,
 			);
 		} catch (error) {
-			console.error(
+			logger.error(
+				'artifacts',
 				`Error finalizing migration: ${
 					error instanceof Error ? error.message : String(error)
 				}`,

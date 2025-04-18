@@ -27,6 +27,9 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
 
   await logger.logNodeStart(NODE_NAME, `Checking linting (attempt #${attemptNumber}): ${file.path}`);
 
+  // Add progress logging
+  await logger.progress(file.path, `Linting check`, file.retries);
+
   // Skip if configured to skip lint
   if (file.skipLint) {
     await logger.info(NODE_NAME, `Skipped (skipLint enabled)`);
@@ -114,6 +117,9 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
 
       await logger.success(NODE_NAME, `Lint check passed`);
 
+      // Add progress logging for lint success
+      await logger.progress(file.path, `Lint check passed`, file.retries);
+
       // Lint check passed
       return {
         file: {
@@ -167,6 +173,9 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
 
       // Log all lint errors
       await logger.logErrors(NODE_NAME, errors, "Lint errors");
+
+      // Add progress logging for lint errors
+      await logger.progress(file.path, `Lint check failed with ${errors.length} errors`, file.retries);
 
       return {
         file: {

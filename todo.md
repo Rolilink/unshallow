@@ -1,6 +1,5 @@
 # Todo for V0
 
-- Implement multiple files support (via directory) and parallel execution
 - Implement meta report
 	- last error attempt will be saved in the unshallow folder
   - after running all the files it will collect summarize each log of the migration
