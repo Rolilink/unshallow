@@ -261,6 +261,7 @@ export class ParallelMigrationManager {
           componentName: enrichedContext.testedComponent?.name,
           componentContent: enrichedContext.testedComponent?.content,
           accessibilitySnapshot: result.file.accessibilityDump,
+          domTree: result.file.domTree,
           imports: enrichedContext.imports,
           userContext: enrichedContext.extraContext
         };

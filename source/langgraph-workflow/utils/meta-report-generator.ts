@@ -73,6 +73,12 @@ ${test.accessibilitySnapshot || ''}
 \`\`\`
 </accessibility-snapshot>
 
+<dom-tree>
+\`\`\`
+${test.domTree || ''}
+\`\`\`
+</dom-tree>
+
 <user-context>
 \`\`\`
 ${test.userContext || ''}

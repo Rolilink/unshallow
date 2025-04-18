@@ -25,6 +25,7 @@ export interface MigrationResult {
   componentName?: string;
   componentContent?: string;
   accessibilitySnapshot?: string;
+  domTree?: string;
   imports?: any[];
   userContext?: string;
 }
