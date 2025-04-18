@@ -5,7 +5,7 @@
 export const generateMetaReportPrompt = `
 <task>
 
-Generate a practical analysis report of React Testing Library migration failures to identify common causes of failure and relationships between them.
+Generate a detailed analysis report of React Testing Library migration failures to identify common causes of failure and relationships between them.
 
 </task>
 
@@ -48,7 +48,8 @@ Produce a structured Markdown report analyzing migration failures. Include secti
 - Note relationships between different types of failures
 - DO NOT suggest code solutions or specific fixes
 - DO highlight missing context that might be contributing to failures
-- Keep analysis practical and focused on information that would help improve future migrations
+- Make a detailed report of the errors you found, with examples of the errors and patterns as codeblocks
+- Focus on indentifying what you think the LLM didn't knew for example how to mock a component or how to test a component with RTL
 
 </instructions>
 
@@ -73,10 +74,6 @@ Analysis of what contextual information might be absent based on the types of fa
 <relationship-analysis>
 Connections between different types of failures that might indicate deeper issues
 </relationship-analysis>
-
-<migration-insights>
-Key observations about the migration process derived from the failure analysis
-</migration-insights>
 
 </output-sections>
 `;

@@ -254,6 +254,11 @@ export class ParallelMigrationManager {
           duration: Date.now() - startTime,
           retries,
 
+          // Add specific error context
+          testResult: result.file.testResult,
+          tsCheck: result.file.tsCheck,
+          lintCheck: result.file.lintCheck,
+
           // Add additional data for meta report
           originalEnzymeContent,
           rtlTestContent: result.file.rtlTest,

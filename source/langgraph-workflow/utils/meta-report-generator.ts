@@ -16,22 +16,56 @@ export function formatFailedTestsInfo(failedTests: MigrationResult[]): string {
 
   for (const test of failedTests) {
     try {
-      // Format the error message
-      const errorMessage = test.error ? (test.error.message || "Unknown error") : "Unknown error";
-
       // Format imports as JSON if they exist
       const importsJSON = test.imports ? JSON.stringify(test.imports, null, 2) : '{}';
 
-      // Append this test's info to the formatted string with fixed tags
+      // Append this test's info to the formatted string with specialized error sections
       formattedInfo += `
 <failed-test>
 <file-path>${test.relativePath}</file-path>
 <failure-step>${test.errorStep || 'UNKNOWN'}</failure-step>
-<error-message>
+
+<!-- Error details based on failure type -->
+${test.testResult && !test.testResult.success ? `
+<test-error>
+<output>
 \`\`\`
-${errorMessage}
+${test.testResult.output || ''}
 \`\`\`
-</error-message>
+</output>
+<exit-code>${test.testResult.exitCode || 0}</exit-code>
+</test-error>
+` : ''}
+
+${test.tsCheck && !test.tsCheck.success ? `
+<typescript-error>
+<errors>
+\`\`\`
+${test.tsCheck.errors ? test.tsCheck.errors.join('\n') : ''}
+\`\`\`
+</errors>
+<output>
+\`\`\`
+${test.tsCheck.output || ''}
+\`\`\`
+</output>
+</typescript-error>
+` : ''}
+
+${test.lintCheck && !test.lintCheck.success ? `
+<lint-error>
+<errors>
+\`\`\`
+${test.lintCheck.errors ? test.lintCheck.errors.join('\n') : ''}
+\`\`\`
+</errors>
+<output>
+\`\`\`
+${test.lintCheck.output || ''}
+\`\`\`
+</output>
+</lint-error>
+` : ''}
 
 <test-context>
 <original-enzyme-test>
@@ -88,6 +122,7 @@ ${test.userContext || ''}
 </failed-test>`;
     } catch (error) {
       logger.error('meta-report', `Error formatting test ${test.relativePath}: ${error instanceof Error ? error.message : String(error)}`);
+
       // Add minimal error information for this test
       formattedInfo += `
 <failed-test>
@@ -95,7 +130,7 @@ ${test.userContext || ''}
 <failure-step>${test.errorStep || 'UNKNOWN'}</failure-step>
 <error-message>
 \`\`\`
-${test.error ? (test.error.message || "Unknown error") : "Unknown error"}
+${error instanceof Error ? error.message : String(error)}
 \`\`\`
 </error-message>
 <test-context>

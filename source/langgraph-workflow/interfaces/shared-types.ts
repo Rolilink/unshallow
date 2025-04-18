@@ -1,5 +1,8 @@
 import { WorkflowStep } from './index.js';
 
+// Import test result interfaces
+import { TestResult, TsCheckResult, LintCheckResult } from './index.js';
+
 /**
  * Result of a single file migration
  */
@@ -8,7 +11,7 @@ export interface MigrationResult {
   filePath: string;
   relativePath: string;
   errorStep?: WorkflowStep;
-  error?: Error;
+  error?: Error | any;
   duration: number;
   retries?: {
     rtl: number;
@@ -17,6 +20,11 @@ export interface MigrationResult {
     lint: number;
     total: number;
   };
+
+  // Additional error context fields
+  testResult?: TestResult;
+  tsCheck?: TsCheckResult;
+  lintCheck?: LintCheckResult;
 
   // Additional fields for meta report
   originalEnzymeContent?: string;
