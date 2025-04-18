@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { EnrichmentOptions, EnrichedContext } from './interfaces/index.js';
+import { EnrichmentOptions, EnrichedContext, ImportInfo } from './interfaces/index.js';
 import { resolveImportPath, fileExists } from './utils/file-utils.js';
 import { ConfigManager } from '../config/config-manager.js';
 import * as fsSync from 'fs';
@@ -57,8 +57,20 @@ export class ContextEnricher {
 
       const componentContent = await fs.readFile(componentFilePath, 'utf8');
 
-      // Get the component's direct imports
+      // For backward compatibility we still maintain the Maps
       const componentImports = new Map<string, string>();
+      const relatedFiles = new Map<string, string>();
+
+      // Create the imports array for the new structure
+      const importsArray: ImportInfo[] = [];
+
+      // Add the component itself as the first import
+      importsArray.push({
+        name: testedComponent.name,
+        code: componentContent,
+        pathRelativeToTest: path.relative(path.dirname(testFilePath), componentFilePath),
+        isComponent: true
+      });
 
       // Extract direct imports from the component file
       const componentDirectImports = await this.extractDirectImports(componentFilePath);
@@ -73,8 +85,20 @@ export class ContextEnricher {
           );
 
           const relativePath = path.relative(this.projectRoot, resolvedPath);
+          const importName = path.basename(resolvedPath);
           const content = await fs.readFile(resolvedPath, 'utf8');
+
+          // Add to legacy Map
           componentImports.set(relativePath, content);
+
+          // Add to new ImportInfo array
+          importsArray.push({
+            name: importName,
+            code: content,
+            pathRelativeToTest: path.relative(path.dirname(testFilePath), resolvedPath),
+            pathRelativeToComponent: path.relative(path.dirname(componentFilePath), resolvedPath),
+            isComponent: false
+          });
         } catch (error) {
           console.warn(
             `Error processing direct import ${importPath} from ${componentFilePath}:`,
@@ -83,13 +107,18 @@ export class ContextEnricher {
         }
       }
 
-      // Build map of related files (deeper imports)
-      const relatedFiles = new Map<string, string>();
-
       // Process deeper imports starting from the component's direct imports
       for (const [importPath] of componentImports) {
         const absolutePath = path.resolve(this.projectRoot, importPath);
-        await this.processImports(absolutePath, relatedFiles, 1, importDepth);
+        await this.processImportsWithStructure(
+          absolutePath,
+          importsArray,
+          relatedFiles,
+          testFilePath,
+          componentFilePath,
+          1,
+          importDepth
+        );
       }
 
       // Create the base context
@@ -99,8 +128,9 @@ export class ContextEnricher {
           filePath: path.relative(this.projectRoot, componentFilePath),
           content: componentContent,
         },
-        componentImports,
-        relatedFiles,
+        imports: importsArray,
+        componentImports, // For backward compatibility
+        relatedFiles,     // For backward compatibility
       };
 
       // Process example tests if provided
@@ -190,11 +220,23 @@ export class ContextEnricher {
    * @returns A map of file paths to their contents
    */
   getRelatedFilesContent(context: EnrichedContext): Map<string, string> {
-    // Combine component imports and related files
-    const combinedMap = new Map<string, string>([
-      ...context.componentImports,
-      ...context.relatedFiles
-    ]);
+    // If we have the legacy Maps, use them
+    if (context.componentImports && context.relatedFiles) {
+      // Combine component imports and related files
+      const combinedMap = new Map<string, string>([
+        ...context.componentImports,
+        ...context.relatedFiles
+      ]);
+      return combinedMap;
+    }
+
+    // If we don't have the legacy Maps, create one from the imports array
+    const combinedMap = new Map<string, string>();
+    if (context.imports) {
+      for (const importInfo of context.imports) {
+        combinedMap.set(importInfo.pathRelativeToTest, importInfo.code);
+      }
+    }
     return combinedMap;
   }
 
@@ -303,11 +345,14 @@ export class ContextEnricher {
   }
 
   /**
-   * Process imports recursively up to the specified depth
+   * Process imports recursively up to the specified depth and add structured import info
    */
-  private async processImports(
+  private async processImportsWithStructure(
     filePath: string,
+    importsArray: ImportInfo[],
     relatedFiles: Map<string, string>,
+    testFilePath: string,
+    componentFilePath: string,
     currentDepth: number,
     maxDepth: number,
   ): Promise<void> {
@@ -315,11 +360,28 @@ export class ContextEnricher {
 
     try {
       const content = await fs.readFile(filePath, 'utf8');
+      const importName = path.basename(filePath);
 
       // Add to the related files map if not already present
       const relativePath = path.relative(this.projectRoot, filePath);
       if (!relatedFiles.has(relativePath)) {
         relatedFiles.set(relativePath, content);
+
+        // Check if this import is already in the imports array to avoid duplicates
+        const exists = importsArray.some(imp =>
+          imp.pathRelativeToTest === path.relative(path.dirname(testFilePath), filePath)
+        );
+
+        if (!exists) {
+          // Add to structured imports array
+          importsArray.push({
+            name: importName,
+            code: content,
+            pathRelativeToTest: path.relative(path.dirname(testFilePath), filePath),
+            pathRelativeToComponent: path.relative(path.dirname(componentFilePath), filePath),
+            isComponent: false
+          });
+        }
       }
 
       const sourceFile = ts.createSourceFile(
@@ -358,9 +420,12 @@ export class ContextEnricher {
 
           // Process nested imports if not at max depth
           if (currentDepth < maxDepth) {
-            await this.processImports(
+            await this.processImportsWithStructure(
               resolvedPath,
+              importsArray,
               relatedFiles,
+              testFilePath,
+              componentFilePath,
               currentDepth + 1,
               maxDepth,
             );

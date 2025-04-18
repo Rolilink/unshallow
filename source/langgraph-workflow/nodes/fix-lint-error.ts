@@ -4,9 +4,13 @@ import { callOpenAIStructured, lintFixResponseSchema } from '../utils/openai.js'
 import { fixLintPrompt } from '../prompts/fix-lint-prompt.js';
 import { PromptTemplate } from "@langchain/core/prompts";
 import { logger } from '../utils/logging-callback.js';
+import { ArtifactFileSystem } from '../utils/artifact-filesystem.js';
 
 // Create a PromptTemplate for the lint fix prompt
 export const fixLintPromptTemplate = PromptTemplate.fromTemplate(fixLintPrompt);
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 /**
  * Fixes ESLint errors in the RTL test
@@ -17,6 +21,25 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
 
   // Increment retry counter and set in logger
   const nextLintAttempt = file.retries.lint + 1;
+
+  // Check for max retries before applying fix
+  if (nextLintAttempt > file.maxRetries) {
+    await logger.error(NODE_NAME, `Max lint fix retries (${file.maxRetries}) exceeded`);
+    await logger.progress(file.path, `Failed: Max lint fix retries (${file.maxRetries}) exceeded`, {
+      ...file.retries,
+      lint: nextLintAttempt
+    });
+
+    return {
+      file: {
+        ...file,
+        status: 'failed',
+        currentStep: WorkflowStep.LINT_CHECK_FAILED,
+      }
+    };
+  }
+
+  // Set the attempt counter in the logger
   logger.setAttemptCount('lint-fix', nextLintAttempt);
 
   await logger.logNodeStart(NODE_NAME, `Fixing lint errors (attempt #${nextLintAttempt}): ${file.path}`);
@@ -116,32 +139,16 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     // Increment the lint retry counter
     const updatedRetries = {
       ...file.retries,
-      lint: file.retries.lint + 1
+      lint: nextLintAttempt
     };
 
     await logger.success(NODE_NAME, `Applied lint fixes (attempt #${nextLintAttempt})`);
 
     // Add progress logging for completion
-    await logger.progress(file.path, `Lint fix applied, ready for validation`, file.retries);
+    await logger.progress(file.path, `Lint fix applied, ready for validation`, updatedRetries);
 
-    // Check if we've exceeded max retries
-    if (updatedRetries.lint >= file.maxRetries) {
-      await logger.error(NODE_NAME, `Max lint fix retries (${file.maxRetries}) exceeded`);
-      await logger.progress(file.path, `Failed: Max lint fix retries (${file.maxRetries}) exceeded`, updatedRetries);
-
-      return {
-        file: {
-          ...file,
-          rtlTest: response.testContent.trim(),
-          fixExplanation: response.explanation,
-          lintCheck: updatedLintCheck,
-          retries: updatedRetries,
-          lintFixHistory,
-          status: 'failed',
-          currentStep: WorkflowStep.LINT_CHECK_FAILED,
-        }
-      };
-    }
+    // Write the updated test to the temp file
+    await artifactFileSystem.writeToTempFile(file.path, response.testContent.trim());
 
     return {
       file: {

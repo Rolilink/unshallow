@@ -4,8 +4,12 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '../utils/logging-callback.js';
 import { stripAnsiCodes } from '../utils/openai.js';
+import { ArtifactFileSystem } from '../utils/artifact-filesystem.js';
 
 const execAsync = promisify(exec);
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 // Define a type for the exec error to handle stdout and stderr properties
 interface ExecError extends Error {
@@ -20,10 +24,10 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
   const { file } = state;
   const NODE_NAME = 'lint-check';
 
-  // Use our tracked lint attempts if in the fix loop
+  // Use our tracked lint attempts if in the fix loop, only increment if not yet in the fix loop
   const attemptNumber = file.currentStep === WorkflowStep.LINT_CHECK_FAILED
     ? logger.getAttemptCount('lint-fix')
-    : logger.incrementAttemptCount('lint');
+    : (file.retries.lint === 0 ? logger.incrementAttemptCount('lint') : logger.getAttemptCount('lint'));
 
   await logger.logNodeStart(NODE_NAME, `Checking linting (attempt #${attemptNumber}): ${file.path}`);
 
@@ -60,8 +64,8 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
   }
 
   try {
-    // Get the path to check
-    const fileToCheck = file.tempPath || file.path;
+    // Get the temp file path using ArtifactFileSystem
+    const fileToCheck = artifactFileSystem.createTempFilePath(file.path);
 
     // First try to auto-fix linting issues
     const lintFixCmd = file.commands.lintFix || 'yarn lint:fix';

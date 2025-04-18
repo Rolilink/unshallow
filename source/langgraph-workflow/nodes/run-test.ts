@@ -1,11 +1,10 @@
 import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { stripAnsiCodes } from '../utils/openai.js';
 import { logger } from '../utils/logging-callback.js';
+import { ArtifactFileSystem } from '../utils/artifact-filesystem.js';
 
 // Extended exec type that includes code in the response
 const execAsync = promisify(exec) as (command: string, options?: any) => Promise<{
@@ -13,6 +12,9 @@ const execAsync = promisify(exec) as (command: string, options?: any) => Promise
   stderr: string;
   code?: number;
 }>;
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 /**
  * Runs the RTL test to verify it works
@@ -48,25 +50,13 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
   }
 
   try {
-    // Use the temp file provided by the workflow state
-    // If workflow fails later, results will be copied to the attemptPath
-    const testFile = file.tempPath || path.join(
-      path.dirname(file.path),
-      `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`
-    );
-
-    // Write the RTL test to the test file
-    await fs.writeFile(testFile, file.rtlTest || '');
-
-    // Update the file state with the test file path
-    const updatedFile = {
-      ...file,
-      tempPath: testFile,
-    };
+    // Get temp file path and write the current test content to it
+    const tempPath = artifactFileSystem.createTempFilePath(file.path);
+    await artifactFileSystem.writeToTempFile(file.path, file.rtlTest || '');
 
     // Run the test command
     const testCmd = file.commands.test || 'yarn test';
-    const fullCommand = `${testCmd} ${testFile}`;
+    const fullCommand = `${testCmd} ${tempPath}`;
 
     await logger.info(NODE_NAME, `Executing: ${fullCommand}`);
 
@@ -115,7 +105,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
       await logger.progress(file.path, `Test passed successfully`, file.retries);
       return {
         file: {
-          ...updatedFile,
+          ...file,
           testResult,
           currentStep: WorkflowStep.RUN_TEST_PASSED,
           status: 'success',
@@ -127,7 +117,7 @@ export const runTestNode = async (state: WorkflowState): Promise<NodeResult> => 
       await logger.progress(file.path, `Test failed - needs fixing`, file.retries);
       return {
         file: {
-          ...updatedFile,
+          ...file,
           testResult,
           currentStep: WorkflowStep.RUN_TEST_FAILED,
         },

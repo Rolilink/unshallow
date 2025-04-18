@@ -46,9 +46,9 @@ export async function handleTestLintCommand(
 
     // Configure options for migration
     const config = {
-      skipTs: options.skipTsCheck || false,
-      skipLint: options.skipLintCheck || false,
-      skipTest: options.skipTestRun || false,
+      skipTs: options.skipTs || false,
+      skipLint: options.skipLint || false,
+      skipTest: options.skipTest || false,
       maxRetries: parseInt(options.maxRetries || '8', 10),
       pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
       lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
@@ -89,8 +89,7 @@ export async function handleTestLintCommand(
       {
         componentName: enrichedContext.testedComponent?.name || 'UnknownComponent',
         componentCode: enrichedContext.testedComponent?.content || '',
-        componentImports: Object.fromEntries(enrichedContext.componentImports || new Map()),
-        imports: Object.fromEntries(contextEnricher.getRelatedFilesContent(enrichedContext)),
+        imports: enrichedContext.imports || [],
         examples: {},
         extraContext: '',
       },

@@ -1,15 +1,27 @@
+import { ImportInfo } from '../interfaces/index.js';
+
 /**
  * Formats the component context to be used in prompts
  */
 export function formatComponentContext(
   componentName: string,
   componentCode: string,
-  imports: Record<string, string>,
+  imports: ImportInfo[],
   examples: Record<string, string> = {},
   extraContext?: string
 ): string {
+  // Find the component import info
+  const componentImport = imports.find(imp => imp.isComponent);
+
   let contextStr = `
-# Component: ${componentName}
+# Component: ${componentName}`;
+
+  // Add component import path if available
+  if (componentImport?.pathRelativeToTest) {
+    contextStr += `\n(Import path relative to test: ${componentImport.pathRelativeToTest})`;
+  }
+
+  contextStr += `
 
 ## Component Code:
 \`\`\`tsx
@@ -19,12 +31,20 @@ ${componentCode}
 ## Related Imports:
 `;
 
-  // Add imports
-  for (const [importName, importCode] of Object.entries(imports)) {
+  // Add all non-component imports
+  for (const importInfo of imports.filter(imp => !imp.isComponent)) {
     contextStr += `
-### ${importName}:
+### ${importInfo.name} (Import path relative to test: ${importInfo.pathRelativeToTest})`;
+
+    // Add path relative to component if available
+    if (importInfo.pathRelativeToComponent) {
+      contextStr += ` (Import path relative to component: ${importInfo.pathRelativeToComponent})`;
+    }
+
+    contextStr += `:
 \`\`\`tsx
-${importCode}
+// path relative to test: ${importInfo.pathRelativeToTest}${importInfo.pathRelativeToComponent ? ` | path relative to tested component: ${importInfo.pathRelativeToComponent}` : ''}
+${importInfo.code}
 \`\`\`
 `;
   }

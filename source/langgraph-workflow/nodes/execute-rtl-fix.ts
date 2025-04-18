@@ -5,13 +5,14 @@ import { executeRtlFixPrompt } from '../prompts/execute-rtl-fix-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
 import { ExecuteRtlFixOutputSchema } from '../interfaces/index.js';
 import { migrationGuidelines } from '../prompts/migration-guidelines.js';
-import path from 'path';
-import * as fs from 'fs/promises';
-import { formatImports } from '../utils/format-utils.js';
 import { logger } from '../utils/logging-callback.js';
+import { ArtifactFileSystem } from '../utils/artifact-filesystem.js';
 
 // Create the PromptTemplate for the execute-rtl-fix prompt
 export const executeRtlFixTemplate = PromptTemplate.fromTemplate(executeRtlFixPrompt);
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 /**
  * Executes the fix for the selected test failure
@@ -51,12 +52,23 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
     // Log the fix intent
     await logger.info(NODE_NAME, `Fix intent: ${file.fixIntent}`);
 
+    // Format component imports into a string with path comments
+    const componentImportsWithPaths = file.context.imports
+      .map(imp => {
+        let comment = `// path relative to test: ${imp.pathRelativeToTest}`;
+        if (imp.pathRelativeToComponent) {
+          comment += ` | path relative to tested component: ${imp.pathRelativeToComponent}`;
+        }
+        return `${comment}\n${imp.code}`;
+      })
+      .join('\n\n');
+
     // Format the prompt using the template
     const formattedPrompt = await executeRtlFixTemplate.format({
       testFile: file.rtlTest || '',
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.componentImports || {}),
+      componentFileImports: componentImportsWithPaths,
       userProvidedContext: file.context.extraContext || '',
       testName: currentError.testName,
       normalizedError: currentError.normalized,
@@ -88,14 +100,8 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
       'test-fix'
     );
 
-    // Use the temp file provided by the workflow state
-    const tempFile = file.tempPath || path.join(
-      path.dirname(file.path),
-      `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`
-    );
-
     // Write the updated test to the temp file
-    await fs.writeFile(tempFile, response.updatedTestFile);
+    await artifactFileSystem.writeToTempFile(file.path, response.updatedTestFile);
 
     await logger.success(NODE_NAME, `Fix executed, ready to run updated test`);
 
@@ -108,7 +114,6 @@ export const executeRtlFixNode = async (state: WorkflowState): Promise<NodeResul
         ...file,
         rtlTest: response.updatedTestFile,
         fixExplanation: response.fixExplanation,
-        tempPath: tempFile,
         currentStep: WorkflowStep.RUN_TEST, // Go back to running the test
       },
     };

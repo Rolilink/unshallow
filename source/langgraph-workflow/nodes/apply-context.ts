@@ -21,7 +21,13 @@ export const applyContextNode = async (state: WorkflowState): Promise<NodeResult
     await logger.logComponent(NODE_NAME, context.componentName, context.componentCode);
 
     // Log all component imports
-    await logger.logImports(NODE_NAME, context.imports);
+    await logger.info(NODE_NAME, `Found ${context.imports.length} imports in total`);
+
+    // Log the component import specifically
+    const componentImport = context.imports.find(imp => imp.isComponent);
+    if (componentImport) {
+      await logger.info(NODE_NAME, `Component import path: ${componentImport.pathRelativeToTest}`);
+    }
 
     // Log example tests if available
     if (context.examples && Object.keys(context.examples).length > 0) {
@@ -47,17 +53,15 @@ export const applyContextNode = async (state: WorkflowState): Promise<NodeResult
         try {
           // Read temp file content using the specific method
           const tempFileContent = await artifactFileSystem.readTempFile(file.path);
-          const tempFilePath = artifactFileSystem.createTempFilePath(file.path);
 
           await logger.success(NODE_NAME, `Retry mode: Loaded existing RTL test content (${tempFileContent.length} characters)`);
 
-          // Return updated state with temp file content and path
+          // Return updated state with temp file content
           return {
             file: {
               ...file,
               componentContext,
               rtlTest: tempFileContent,  // Set the RTL test content from temp file
-              tempPath: tempFilePath,    // Set the temp file path
               currentStep: WorkflowStep.APPLY_CONTEXT,
             },
           };

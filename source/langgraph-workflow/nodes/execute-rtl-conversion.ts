@@ -47,9 +47,9 @@ export const executeRtlConversionNode = async (state: WorkflowState): Promise<No
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.componentImports || {}),
+      componentFileImports: formatImports(file.context.imports || []),
       userProvidedContext: file.context.extraContext || '',
-      gherkinPlan: file.fixPlan.plan,
+      gherkinPlan: file.fixPlan.plan.trim(),
       migrationGuidelines: migrationGuidelines,
       supportingExamples: file.context.examples || ''
     });

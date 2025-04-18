@@ -4,7 +4,6 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { analyzeFailurePrompt } from '../prompts/analyze-failure-prompt.js';
 import { callOpenAIStructured } from '../utils/openai.js';
 import { AnalyzeFailureOutputSchema } from '../interfaces/index.js';
-import { migrationGuidelines } from '../prompts/migration-guidelines.js';
 import { formatImports } from '../utils/format-utils.js';
 import { logger } from '../utils/logging-callback.js';
 
@@ -45,15 +44,14 @@ export const analyzeFailureNode = async (state: WorkflowState): Promise<NodeResu
       testFile: file.rtlTest || '',
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: formatImports(file.context.componentImports || {}),
-      userProvidedContext: file.context.extraContext || '',
+      componentFileImports: formatImports(file.context.imports || []),
       previousTestCode: file.rtlTest || '',
       accessibilityDump: file.accessibilityDump || '',
       domTree: file.domTree || '',
       testName: currentError.testName,
       normalizedError: currentError.normalized,
       rawError: currentError.message,
-      migrationGuidelines: migrationGuidelines
+      userProvidedContext: file.context.extraContext || ''
     });
 
     await logger.info(NODE_NAME, `Calling OpenAI to analyze test failure`);

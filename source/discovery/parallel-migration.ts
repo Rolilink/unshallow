@@ -223,8 +223,7 @@ export class ParallelMigrationManager {
           {
             componentName: enrichedContext.testedComponent?.name || 'UnknownComponent',
             componentCode: enrichedContext.testedComponent?.content || '',
-            componentImports: Object.fromEntries(enrichedContext.componentImports || new Map()),
-            imports: Object.fromEntries(contextEnricher.getRelatedFilesContent(enrichedContext)),
+            imports: enrichedContext.imports || [],
             examples: enrichedContext.exampleTests ? Object.fromEntries(enrichedContext.exampleTests) : {},
             extraContext: enrichedContext.extraContext || '',
           },

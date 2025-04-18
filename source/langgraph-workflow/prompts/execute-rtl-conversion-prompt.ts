@@ -24,6 +24,9 @@ Output the full RTL test code using TypeScript. Follow best practices including 
 <instructions>
 
 - Follow each Gherkin Scenario as a distinct \`it\` block inside a relevant \`describe\`.
+- Each import in the context section includes a path comment showing the correct path relative to the test file.
+- When importing dependencies in the RTL test, use the path provided in the "path relative to test" comment to ensure proper import paths.
+- Make sure to import from the exact paths relative to the test file as indicated in the import comments.
 {migrationGuidelines}
 
 </instructions>
@@ -86,7 +89,9 @@ IMPORTANT: The following contains user-provided context and additional instructi
 \`\`\`tsx
 import {{ render, screen }} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import MyComponent from './MyComponent';
+import MyComponent from '../components/MyComponent';
+import {{ ButtonHelper }} from '../utils/ButtonHelper';
+import {{ setupTest }} from '../test-utils';
 
 describe('MyComponent', () => {{
   it('should display welcome message when user logs in', async () => {{

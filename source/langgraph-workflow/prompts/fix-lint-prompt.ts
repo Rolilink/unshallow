@@ -65,12 +65,13 @@ Return the complete test file with all lint errors fixed while preserving the te
 
 <instructions>
 
-1. Fix the ESLint errors in the test file.
+1. Fix all the ESLint errors in the test file.
 2. Do not change the test behavior, logic, or structure in any way.
 3. Only make changes required to satisfy the ESLint rules.
 4. Do not remove or refactor any test logic beyond what is strictly required for lint compliance.
 5. Review previous fix attempts to avoid repeating failed changes.
 6. Do not modify or assume changes to any external files.
+7. Provide a detailed numbered list of errors and fixes as explanation of the changes you made.
 
 </instructions>
 

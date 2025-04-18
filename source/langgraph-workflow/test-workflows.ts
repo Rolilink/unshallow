@@ -2,7 +2,10 @@ import { EnrichedContext, WorkflowOptions, WorkflowState, WorkflowStep } from '.
 import { lintCheckNode } from './nodes/lint-check.js';
 import { fixLintErrorNode } from './nodes/fix-lint-error.js';
 import * as fs from 'fs/promises';
-import * as path from 'path';
+import { ArtifactFileSystem } from './utils/artifact-filesystem.js';
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 /**
  * Test the lint check and fix cycle on a file
@@ -18,18 +21,14 @@ export async function testLintCycle(
   // Read the file content
   const content = await fs.readFile(filePath, 'utf8');
 
-  // Create a temp file path
-  const ext = path.extname(filePath);
-  const baseName = path.basename(filePath, ext);
-  const dirName = path.dirname(filePath);
-  const tempPath = path.join(dirName, `${baseName}.temp${ext}`);
+  // Get the temp file path using ArtifactFileSystem
+  const tempPath = artifactFileSystem.createTempFilePath(filePath);
 
   // Initialize the state
   let state: WorkflowState = {
     file: {
       path: filePath,
       content: content,
-      tempPath: tempPath,
       status: 'in-progress',
       currentStep: WorkflowStep.LINT_CHECK,
       context,
@@ -55,7 +54,7 @@ export async function testLintCycle(
   };
 
   // Write the content to the temp file
-  await fs.writeFile(tempPath, content, 'utf8');
+  await artifactFileSystem.writeToTempFile(filePath, content);
 
   // Run the lint cycle
   console.log('Starting lint check cycle...');
@@ -84,10 +83,7 @@ export async function testLintCycle(
       const fixResult = await fixLintErrorNode(state);
       state = fixResult as WorkflowState;
 
-      // Update the temp file with the fixed content
-      if (state.file.rtlTest) {
-        await fs.writeFile(tempPath, state.file.rtlTest, 'utf8');
-      }
+      // The fix has already been written to the temp file by the fixLintErrorNode
     }
 
     cycles++;
@@ -95,7 +91,7 @@ export async function testLintCycle(
 
   // Clean up the temp file
   try {
-    await fs.unlink(tempPath);
+    await artifactFileSystem.cleanupTempFile(tempPath);
   } catch (error) {
     console.warn(`Could not delete temp file: ${tempPath}`);
   }

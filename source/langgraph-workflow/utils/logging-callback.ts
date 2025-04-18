@@ -80,20 +80,32 @@ export class Logger {
 		}
 
 		// Format attempt info if applicable
-		let attemptInfo = '';
+		let displayState = state;
 		if (state.includes('fixing') && state.includes(':')) {
 			const parts = state.split(':');
 			if (parts.length > 0 && parts[0]) {
 				const stageType = parts[0].trim(); // e.g., "RTL fixing"
-				const operationType = stageType.toLowerCase().replace(' ', '_'); // Convert to operation type
+
+				// Map the stage type to the correct operation counter
+				let operationType: string;
+				if (stageType.toLowerCase().includes('ts')) {
+					operationType = 'ts-fix';
+				} else if (stageType.toLowerCase().includes('lint')) {
+					operationType = 'lint-fix';
+				} else if (stageType.toLowerCase().includes('rtl')) {
+					operationType = 'test-fix';
+				} else {
+					operationType = stageType.toLowerCase().replace(' ', '_');
+				}
+
 				const attemptNum = this.getAttemptCount(operationType);
-				attemptInfo = ` (Attempt #${attemptNum})`;
-				state = `${stageType}${attemptInfo}: ${parts[1] || ''}`;
+				const attemptInfo = ` (Attempt #${attemptNum || 1})`;  // Default to 1 if counter is 0
+				displayState = `${stageType}${attemptInfo}: ${parts[1] || ''}`;
 			}
 		}
 
 		// Create progress message - always shown regardless of silent mode
-		const message = `[Progress] ${fileName} - ${state}${retryInfo}`;
+		const message = `[Progress] ${fileName} - ${displayState}${retryInfo}`;
 
 		// Always log to console regardless of silent setting - use process.stdout directly
 		// to bypass the console.log silent setting
@@ -383,7 +395,7 @@ export class Logger {
 		attemptType?: string,
 	): Promise<void> {
 		const attemptInfo = attemptType
-			? ` (Attempt #${this.getAttemptCount(attemptType)})`
+			? ` (Attempt #${this.getAttemptCount(attemptType) || 1})`
 			: '';
 
 		const header = this.formatHeader(
@@ -474,7 +486,7 @@ export class Logger {
 		updatedTest: string | undefined,
 		attemptType: string,
 	): Promise<void> {
-		const attemptCount = this.getAttemptCount(attemptType);
+		const attemptCount = this.getAttemptCount(attemptType) || 1;
 		const header = this.formatHeader(
 			nodeName,
 			`Fix (Attempt #${attemptCount})`,

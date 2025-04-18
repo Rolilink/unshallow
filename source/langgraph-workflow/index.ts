@@ -34,6 +34,7 @@ import {getLangfuseCallbackHandler} from '../langfuse.js';
 import {logger} from './utils/logging-callback.js';
 import {TestFileSystem} from './utils/test-filesystem.js';
 import {ArtifactFileSystem} from './utils/artifact-filesystem.js';
+import { v4 as uuidv4 } from 'uuid';
 
 // Initialize filesystem helpers
 const testFileSystem = new TestFileSystem();
@@ -74,8 +75,8 @@ graph
 	.addConditionalEdges(
 		'apply_context',
 		state => {
-			// In retry mode with a valid temp file, skip to run_test
-			if (state.file.retryMode && state.file.rtlTest && state.file.tempPath) {
+			// In retry mode with a valid rtlTest, skip to run_test
+			if (state.file.retryMode && state.file.rtlTest) {
 				return 'run_test';
 			}
 			// Otherwise continue with normal planning
@@ -221,8 +222,7 @@ export function createWorkflow(
 			context: {
 				componentName: context.componentName,
 				componentCode: context.componentCode,
-				componentImports: context.componentImports || {},
-				imports: context.imports || {},
+				imports: context.imports || [],
 				examples: context.examples,
 				extraContext: context.extraContext,
 			}, // Context from ContextEnricher
@@ -264,6 +264,9 @@ export function createWorkflow(
 	 */
 	const execute = async (): Promise<WorkflowState> => {
 		try {
+			// Generate a unique ID for this workflow run
+			const workflowRunId = `workflow-${uuidv4()}`;
+
 			// Get the Langfuse callback handler
 			const langfuseCallbackHandler = await getLangfuseCallbackHandler();
 
@@ -274,6 +277,7 @@ export function createWorkflow(
 			const result = await enzymeToRtlConverterGraph.invoke(initialState, {
 				callbacks: langfuseCallbackHandler ? [langfuseCallbackHandler] : [],
 				recursionLimit: 200,
+				runId: workflowRunId, // Pass unique run ID to LangGraph
 			});
 
 			// Log final progress
@@ -342,7 +346,6 @@ export async function processSingleFile(
 		unshallowDir,
 		testDir,
 		logsPath,
-		tempPath,
 		attemptPath,
 	};
 

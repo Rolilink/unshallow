@@ -4,9 +4,13 @@ import { callOpenAIStructured, tsFixResponseSchema } from '../utils/openai.js';
 import { fixTsPrompt } from '../prompts/fix-ts-prompt.js';
 import { PromptTemplate } from "@langchain/core/prompts";
 import { logger } from '../utils/logging-callback.js';
+import { ArtifactFileSystem } from '../utils/artifact-filesystem.js';
 
 // Create a PromptTemplate for the TS fix prompt
 export const fixTsPromptTemplate = PromptTemplate.fromTemplate(fixTsPrompt);
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 /**
  * Fixes TypeScript errors in the RTL test
@@ -48,6 +52,25 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
 
     // Increment the attempt count for TS before adding to history
     const nextTsAttempt = file.retries.ts + 1;
+
+    // Check for max retries before applying fix
+    if (nextTsAttempt > file.maxRetries) {
+      await logger.error(NODE_NAME, `Max TypeScript fix retries (${file.maxRetries}) exceeded`);
+      await logger.progress(file.path, `Failed: Max TypeScript fix retries (${file.maxRetries}) exceeded`, {
+        ...file.retries,
+        ts: nextTsAttempt
+      });
+
+      return {
+        file: {
+          ...file,
+          status: 'failed',
+          currentStep: WorkflowStep.TS_VALIDATION_FAILED,
+        }
+      };
+    }
+
+    // Set the attempt counter in the logger
     logger.setAttemptCount('ts-fix', nextTsAttempt);
 
     // If we have a current test and it's not the first attempt, add it to history
@@ -77,11 +100,22 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
       fixHistory = tsFixHistory.map(formatAttempt).join('\n\n');
     }
 
+    // Format component imports into a string with path comments
+    const componentImportsWithPaths = file.context.imports
+      .map(imp => {
+        let comment = `// path relative to test: ${imp.pathRelativeToTest}`;
+        if (imp.pathRelativeToComponent) {
+          comment += ` | path relative to tested component: ${imp.pathRelativeToComponent}`;
+        }
+        return `${comment}\n${imp.code}`;
+      })
+      .join('\n\n');
+
     // Format the prompt using the template
     const formattedPrompt = await fixTsPromptTemplate.format({
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      componentFileImports: JSON.stringify(file.context.imports),
+      componentFileImports: componentImportsWithPaths,
       testFile: file.rtlTest || '',
       tsErrors,
       fixHistory,
@@ -111,31 +145,16 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
     // Increment the TS retry counter
     const updatedRetries = {
       ...file.retries,
-      ts: file.retries.ts + 1
+      ts: nextTsAttempt
     };
 
     await logger.success(NODE_NAME, 'Applied TypeScript fixes');
 
     // Add progress logging for completion
-    await logger.progress(file.path, `TS fix applied, ready for validation`, file.retries);
+    await logger.progress(file.path, `TS fix applied, ready for validation`, updatedRetries);
 
-    // Check if we've exceeded max retries
-    if (updatedRetries.ts >= file.maxRetries) {
-      await logger.error(NODE_NAME, `Max TypeScript fix retries (${file.maxRetries}) exceeded`);
-      await logger.progress(file.path, `Failed: Max TypeScript fix retries (${file.maxRetries}) exceeded`, updatedRetries);
-
-      return {
-        file: {
-          ...file,
-          rtlTest: response.testContent.trim(),
-          fixExplanation: response.explanation,
-          retries: updatedRetries,
-          tsFixHistory,
-          status: 'failed',
-          currentStep: WorkflowStep.TS_VALIDATION_FAILED,
-        }
-      };
-    }
+    // Write the updated test to the temp file
+    await artifactFileSystem.writeToTempFile(file.path, response.testContent.trim());
 
     return {
       file: {

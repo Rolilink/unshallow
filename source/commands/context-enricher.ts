@@ -68,8 +68,10 @@ export async function handleContextEnricherCommand(
         // Convert Maps to objects for JSON serialization
         const jsonOutput = {
           testedComponent: enrichedContext.testedComponent,
-          componentImports: Object.fromEntries(enrichedContext.componentImports),
-          relatedFiles: Object.fromEntries(enrichedContext.relatedFiles),
+          imports: enrichedContext.imports || [],
+          // Handle potentially undefined maps with a fallback empty object
+          componentImports: enrichedContext.componentImports ? Object.fromEntries(enrichedContext.componentImports) : {},
+          relatedFiles: enrichedContext.relatedFiles ? Object.fromEntries(enrichedContext.relatedFiles) : {},
           exampleTests: enrichedContext.exampleTests
             ? Object.fromEntries(enrichedContext.exampleTests)
             : undefined,
@@ -90,23 +92,42 @@ export async function handleContextEnricherCommand(
         console.log(enrichedContext.testedComponent.content);
         console.log('------------------------\n');
 
-        console.log('\nComponent Imports:');
-        enrichedContext.componentImports.forEach((content, filePath) => {
-          console.log(`- ${filePath}`);
-          console.log('\nFile Content:');
-          console.log('------------------------');
-          console.log(content);
-          console.log('------------------------\n');
-        });
+        // Display new structured imports
+        console.log('\nStructured Imports:');
+        if (enrichedContext.imports && enrichedContext.imports.length > 0) {
+          enrichedContext.imports.forEach(imp => {
+            console.log(`- ${imp.name} (${imp.isComponent ? 'component' : 'import'})`);
+            console.log(`  Path relative to test: ${imp.pathRelativeToTest}`);
+            if (imp.pathRelativeToComponent) {
+              console.log(`  Path relative to component: ${imp.pathRelativeToComponent}`);
+            }
+          });
+        } else {
+          console.log('No structured imports found');
+        }
 
-        console.log('\nOther Related Files:');
-        enrichedContext.relatedFiles.forEach((content, filePath) => {
-          console.log(`- ${filePath}`);
-          console.log('\nFile Content:');
-          console.log('------------------------');
-          console.log(content);
-          console.log('------------------------\n');
-        });
+        // Only display legacy imports if available
+        if (enrichedContext.componentImports && enrichedContext.componentImports.size > 0) {
+          console.log('\nComponent Imports (Legacy):');
+          enrichedContext.componentImports.forEach((content, filePath) => {
+            console.log(`- ${filePath}`);
+            console.log('\nFile Content:');
+            console.log('------------------------');
+            console.log(content);
+            console.log('------------------------\n');
+          });
+        }
+
+        if (enrichedContext.relatedFiles && enrichedContext.relatedFiles.size > 0) {
+          console.log('\nOther Related Files (Legacy):');
+          enrichedContext.relatedFiles.forEach((content, filePath) => {
+            console.log(`- ${filePath}`);
+            console.log('\nFile Content:');
+            console.log('------------------------');
+            console.log(content);
+            console.log('------------------------\n');
+          });
+        }
 
         if (enrichedContext.exampleTests && enrichedContext.exampleTests.size > 0) {
           console.log('\nExample Tests:');

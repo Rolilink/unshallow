@@ -1,12 +1,15 @@
 import { WorkflowState, WorkflowStep } from '../interfaces/index.js';
 import { NodeResult } from '../interfaces/node.js';
-import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '../utils/logging-callback.js';
 import { stripAnsiCodes } from '../utils/openai.js';
+import { ArtifactFileSystem } from '../utils/artifact-filesystem.js';
 
 const execAsync = promisify(exec);
+
+// Initialize the artifact file system
+const artifactFileSystem = new ArtifactFileSystem();
 
 /**
  * Validates the TypeScript in the test file
@@ -15,10 +18,10 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
   const { file } = state;
   const NODE_NAME = 'ts-validation';
 
-  // Use our tracked TS attempts if in the fix loop
+  // Use our tracked TS attempts if in the fix loop, only increment if not yet in the fix loop
   const attemptNumber = file.currentStep === WorkflowStep.TS_VALIDATION_FAILED
     ? logger.getAttemptCount('ts-fix')
-    : logger.incrementAttemptCount('ts');
+    : (file.retries.ts === 0 ? logger.incrementAttemptCount('ts') : logger.getAttemptCount('ts'));
 
   await logger.logNodeStart(NODE_NAME, `Validating TypeScript (attempt #${attemptNumber}): ${file.path}`);
 
@@ -55,9 +58,8 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
   }
 
   try {
-    // Create or use temporary file for validation
-    const tempDir = path.dirname(file.path);
-    const tempFile = file.tempPath || path.join(tempDir, `${path.basename(file.path, path.extname(file.path))}.temp${path.extname(file.path)}`);
+    // Get the temp file path using ArtifactFileSystem
+    const tempFile = artifactFileSystem.createTempFilePath(file.path);
 
     // Run TypeScript validation with custom command if provided
     const tsCheckCmd = file.commands.tsCheck || 'yarn ts:check';

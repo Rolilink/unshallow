@@ -52,13 +52,23 @@ export interface Component {
 }
 
 /**
+ * Import information structure
+ */
+export interface ImportInfo {
+  name: string;            // Name of the import (e.g., component or utility name)
+  code: string;            // The actual code content
+  pathRelativeToTest: string;    // Path relative to the test file
+  pathRelativeToComponent?: string; // Path relative to the tested component
+  isComponent?: boolean;   // Whether this is the component being tested
+}
+
+/**
  * Simplified context structure derived from the context enricher
  */
 export interface EnrichedContext {
   componentName: string;
   componentCode: string;
-  componentImports: Record<string, string>;
-  imports: Record<string, string>;
+  imports: ImportInfo[]; // New structured imports array
   examples?: Record<string, string>;
   extraContext?: string;
 }
@@ -165,7 +175,6 @@ export interface FixPlan {
 export interface FileState {
   path: string;
   content: string;
-  tempPath?: string;
   originalTest: string;
   rtlTest?: string;
   status: FileStatus;

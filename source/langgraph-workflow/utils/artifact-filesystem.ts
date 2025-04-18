@@ -311,6 +311,35 @@ export class ArtifactFileSystem {
 	}
 
 	/**
+	 * Writes content to a temporary file, creating it if it doesn't exist
+	 * @param originalFilePath The original file path
+	 * @param content The content to write
+	 * @param tempFilePath Optional custom temp file path (will create one if not provided)
+	 * @returns The path to the temp file
+	 */
+	async writeToTempFile(
+		originalFilePath: string,
+		content: string,
+		tempFilePath?: string
+	): Promise<string> {
+		const tempPath = tempFilePath || this.createTempFilePath(originalFilePath);
+
+		try {
+			await this.writeFile(tempPath, content);
+			logger.info('artifacts', `Updated temp file at ${tempPath}`);
+			return tempPath;
+		} catch (error) {
+			logger.error(
+				'artifacts',
+				`Error writing to temp file ${tempPath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+			throw error;
+		}
+	}
+
+	/**
 	 * Cleans up a temporary file
 	 */
 	async cleanupTempFile(tempPath: string): Promise<void> {

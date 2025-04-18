@@ -4,7 +4,6 @@ import { callOpenAIStructured, rtlConversionExecutorSchema } from '../utils/open
 import { PromptTemplate } from "@langchain/core/prompts";
 import { executeRtlConversionPrompt } from '../prompts/execute-rtl-conversion-prompt.js';
 import { z } from 'zod';
-import { formatImports } from '../utils/format-utils.js';
 import { logger } from '../utils/logging-callback.js';
 
 // Define schema for convertToRtl output
@@ -30,13 +29,24 @@ export const convertToRTLNode = async (state: WorkflowState): Promise<NodeResult
   await logger.logNodeStart(NODE_NAME, `Converting: ${file.path}`);
 
   try {
+    // Format component imports into a string with path comments
+    const componentImportsWithPaths = file.context.imports
+      .map(imp => {
+        let comment = `// path relative to test: ${imp.pathRelativeToTest}`;
+        if (imp.pathRelativeToComponent) {
+          comment += ` | path relative to tested component: ${imp.pathRelativeToComponent}`;
+        }
+        return `${comment}\n${imp.code}`;
+      })
+      .join('\n\n');
+
     // Format the prompt using the template with properly formatted code blocks
     const formattedPrompt = await executeRtlConversionTemplate.format({
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      // Filter out the component's own file from imports
-      componentFileImports: formatImports(file.context.componentImports || {}),
+      // Pass the imports with path comments
+      componentFileImports: componentImportsWithPaths,
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: '', // No plan for direct conversion
       migrationGuidelines: '',
@@ -88,13 +98,24 @@ export const convertToRtlNode = async (state: WorkflowState): Promise<NodeResult
   await logger.logNodeStart(NODE_NAME, `Converting Enzyme test to RTL directly`);
 
   try {
+    // Format component imports into a string with path comments
+    const componentImportsWithPaths = file.context.imports
+      .map(imp => {
+        let comment = `// path relative to test: ${imp.pathRelativeToTest}`;
+        if (imp.pathRelativeToComponent) {
+          comment += ` | path relative to tested component: ${imp.pathRelativeToComponent}`;
+        }
+        return `${comment}\n${imp.code}`;
+      })
+      .join('\n\n');
+
     // Format the prompt using the template
     const formattedPrompt = await convertToRtlTemplate.format({
       testFile: file.content,
       componentName: file.context.componentName,
       componentSourceCode: file.context.componentCode,
-      // Filter out the component's own file from imports
-      componentFileImports: formatImports(file.context.componentImports || {}),
+      // Pass the imports with path comments
+      componentFileImports: componentImportsWithPaths,
       userProvidedContext: file.context.extraContext || '',
       gherkinPlan: '', // No plan for direct conversion
       migrationGuidelines: '',
