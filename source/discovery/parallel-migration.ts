@@ -230,7 +230,7 @@ export class ParallelMigrationManager {
           },
           {
             // Pass all options from the command line
-            maxRetries: parseInt(this.options.maxRetries || '20', 10),
+            maxRetries: parseInt(this.options.maxRetries || '8', 10),
             skipTs: this.options.skipTsCheck || false,
             skipLint: this.options.skipLintCheck || false,
             skipTest: this.options.skipTestRun || false,

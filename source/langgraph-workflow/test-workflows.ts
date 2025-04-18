@@ -39,7 +39,7 @@ export async function testLintCycle(
         ts: 0,
         lint: 0,
       },
-      maxRetries: options.maxRetries || 15,
+      maxRetries: options.maxRetries || 8,
       commands: {
         lintCheck: options.lintCheckCmd || 'yarn lint:check',
         lintFix: options.lintFixCmd || 'yarn lint:fix',
@@ -48,9 +48,9 @@ export async function testLintCycle(
       },
       originalTest: content,
       rtlTest: content, // Use the current content as RTL test for lint checking
-      skipTs: true,
-      skipLint: false,
-      skipTest: true,
+      skipTs: options.skipTs || false,
+      skipLint: options.skipLint || false,
+      skipTest: options.skipTest || false,
     },
   };
 

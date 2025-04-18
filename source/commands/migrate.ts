@@ -238,7 +238,7 @@ async function handleSingleFile(
       skipTs: options.skipTsCheck || false,
       skipLint: options.skipLintCheck || false,
       skipTest: options.skipTestRun || false,
-      maxRetries: parseInt(options.maxRetries || '15', 10),
+      maxRetries: parseInt(options.maxRetries || '8', 10),
       pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
       importDepth: parseInt(options.importDepth || '1', 10),
       exampleTests: options.examples

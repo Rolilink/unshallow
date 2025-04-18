@@ -83,11 +83,13 @@ export class Logger {
 		let attemptInfo = '';
 		if (state.includes('fixing') && state.includes(':')) {
 			const parts = state.split(':');
-			const stageType = parts[0].trim(); // e.g., "RTL fixing"
-			const operationType = stageType.toLowerCase().replace(' ', '_'); // Convert to operation type
-			const attemptNum = this.getAttemptCount(operationType);
-			attemptInfo = ` (Attempt #${attemptNum})`;
-			state = `${stageType}${attemptInfo}: ${parts[1]}`;
+			if (parts.length > 0 && parts[0]) {
+				const stageType = parts[0].trim(); // e.g., "RTL fixing"
+				const operationType = stageType.toLowerCase().replace(' ', '_'); // Convert to operation type
+				const attemptNum = this.getAttemptCount(operationType);
+				attemptInfo = ` (Attempt #${attemptNum})`;
+				state = `${stageType}${attemptInfo}: ${parts[1] || ''}`;
+			}
 		}
 
 		// Create progress message - always shown regardless of silent mode

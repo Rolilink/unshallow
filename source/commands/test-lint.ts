@@ -14,6 +14,12 @@ export interface TestLintOptions {
   lintCheckCmd?: string;
   lintFixCmd?: string;
   outputFile?: string;
+  skipTs?: boolean;
+  skipLint?: boolean;
+  skipTest?: boolean;
+  pattern?: string;
+  tsCheckCmd?: string;
+  testCmd?: string;
 }
 
 /**
@@ -38,11 +44,17 @@ export async function handleTestLintCommand(
       return 1;
     }
 
-    // Configure options for testing
+    // Configure options for migration
     const config = {
-      maxRetries: parseInt(options.maxRetries || '15', 10),
+      skipTs: options.skipTsCheck || false,
+      skipLint: options.skipLintCheck || false,
+      skipTest: options.skipTestRun || false,
+      maxRetries: parseInt(options.maxRetries || '8', 10),
+      pattern: options.pattern || '**/*.{test,spec}.{ts,tsx}',
       lintCheckCmd: options.lintCheckCmd || 'yarn lint:check',
       lintFixCmd: options.lintFixCmd || 'yarn lint:fix',
+      tsCheckCmd: options.tsCheckCmd || 'yarn ts:check',
+      testCmd: options.testCmd || 'yarn test',
     };
 
     // Log command execution

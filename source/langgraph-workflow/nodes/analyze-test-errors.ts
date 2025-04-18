@@ -12,8 +12,8 @@ export const analyzeTestErrorsNode = async (state: WorkflowState): Promise<NodeR
   const { file } = state;
   const NODE_NAME = 'analyze-test-errors';
 
-  // Get max retries from file state, using the option set during workflow creation
-  const maxRetries = file.maxRetries || 20;
+  // Get max retries (fallback to 8 if not set)
+  const maxRetries = file.maxRetries || 8;
 
   await logger.logNodeStart(NODE_NAME, "Analyzing test errors");
 
