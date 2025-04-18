@@ -2,41 +2,13 @@ import { processSingleFile } from '../langgraph-workflow/index.js';
 import { ContextEnricher } from '../context-enricher/index.js';
 import { TestFileItem } from './test-file-discovery.js';
 import { MigrateOptions } from '../commands/migrate.js';
-import { WorkflowStep } from '../langgraph-workflow/interfaces/index.js';
 import { logger } from '../langgraph-workflow/utils/logging-callback.js';
+import { MigrationResult, MigrationSummary } from '../langgraph-workflow/interfaces/shared-types.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 
-/**
- * Result of a single file migration
- */
-export interface MigrationResult {
-  success: boolean;
-  filePath: string;
-  relativePath: string;
-  errorStep?: WorkflowStep;
-  error?: Error;
-  duration: number;
-  retries?: {
-    rtl: number;
-    test: number;
-    ts: number;
-    lint: number;
-    total: number;
-  };
-}
-
-/**
- * Summary of all migrations
- */
-export interface MigrationSummary {
-  totalFiles: number;
-  successful: number;
-  failed: number;
-  skipped: number;
-  totalDuration: number;
-  results: MigrationResult[];
-}
+// Import generateMetaReport function
+import { generateMetaReport } from '../langgraph-workflow/utils/meta-report-generator.js';
 
 /**
  * Manages parallel migration of multiple test files
@@ -139,7 +111,7 @@ export class ParallelMigrationManager {
     }
 
     // Generate summary
-    const summary = {
+    const summary: MigrationSummary = {
       totalFiles: this.completed.length,
       successful: this.completed.filter(r => r.success).length,
       failed: this.completed.filter(r => !r.success).length,
@@ -151,6 +123,18 @@ export class ParallelMigrationManager {
     // Clean up .unshallow directories if all migrations were successful
     if (summary.failed === 0 && summary.successful > 0) {
       await this.cleanupAllUnshallowDirs();
+    } else if (summary.failed > 0) {
+      // Generate meta report for failures
+      console.log('\nGenerating meta report for failed migrations...');
+      try {
+        const metaReportPath = await generateMetaReport(summary);
+        if (metaReportPath) {
+          summary.metaReportPath = metaReportPath;
+          console.log(`Meta report saved to: ${metaReportPath}`);
+        }
+      } catch (error) {
+        console.error('Error generating meta report:', error instanceof Error ? error.message : String(error));
+      }
     }
 
     return summary;
@@ -217,6 +201,9 @@ export class ParallelMigrationManager {
           exampleTests: this.options.examples?.split(',')
         });
 
+        // Read original test content
+        const originalEnzymeContent = await fs.readFile(file.path, 'utf8');
+
         // Process the file with the retry flag if temp file exists
         const result = await processSingleFile(
           file.path,
@@ -257,6 +244,7 @@ export class ParallelMigrationManager {
           total: result.file.retries.rtl + result.file.retries.test + result.file.retries.ts + result.file.retries.lint
         };
 
+        // Create enhanced migration result with additional data for meta report
         return {
           success: result.file.status === 'success',
           filePath: file.path,
@@ -264,7 +252,17 @@ export class ParallelMigrationManager {
           errorStep: result.file.currentStep,
           error: result.file.error,
           duration: Date.now() - startTime,
-          retries
+          retries,
+
+          // Add additional data for meta report
+          originalEnzymeContent,
+          rtlTestContent: result.file.rtlTest,
+          planContent: result.file.fixPlan?.plan,
+          componentName: enrichedContext.testedComponent?.name,
+          componentContent: enrichedContext.testedComponent?.content,
+          accessibilitySnapshot: result.file.accessibilityDump,
+          imports: enrichedContext.imports,
+          userContext: enrichedContext.extraContext
         };
       } catch (error) {
         return {

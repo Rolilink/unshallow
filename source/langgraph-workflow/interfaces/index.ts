@@ -232,6 +232,9 @@ export interface FileState {
 
   // Retry mode flag
   retryMode?: boolean;
+
+  // Meta report path
+  metaReportPath?: string;
 }
 
 /**

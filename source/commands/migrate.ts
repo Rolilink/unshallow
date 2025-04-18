@@ -215,6 +215,14 @@ async function handleMultipleFiles(
         });
     }
 
+    if (summary.metaReportPath) {
+      console.log('\n-------------------------------------------------------------------------');
+      console.log('A meta report has been generated analyzing the migration failures:');
+      console.log(summary.metaReportPath);
+      console.log('Review this report to understand common failure patterns and improve future migrations');
+      console.log('-------------------------------------------------------------------------\n');
+    }
+
     return summary.failed > 0 ? 1 : 0;
   } catch (error) {
     console.error('Error running parallel migration:', error);
@@ -323,6 +331,14 @@ async function handleSingleFile(
         if (result.file.error) {
           console.error('Error:', result.file.error.message);
         }
+      }
+
+      if (result.file.metaReportPath) {
+        console.log('\n-------------------------------------------------------------------------');
+        console.log('A meta report has been generated analyzing the migration failures:');
+        console.log(result.file.metaReportPath);
+        console.log('Review this report to understand common failure patterns and improve future migrations');
+        console.log('-------------------------------------------------------------------------\n');
       }
 
       return result.file.status === 'success' ? 0 : 1;

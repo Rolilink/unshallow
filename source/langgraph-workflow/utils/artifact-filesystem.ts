@@ -389,4 +389,27 @@ export class ArtifactFileSystem {
 			);
 		}
 	}
+
+	/**
+	 * Saves a meta report for failed migrations
+	 * @param report The content of the meta report
+	 * @param customPath Optional custom path for the report (defaults to migration-meta-report.md in cwd)
+	 * @returns The path to the saved report
+	 */
+	async saveMetaReport(report: string, customPath?: string): Promise<string> {
+		try {
+			const reportPath = customPath || path.join(process.cwd(), 'migration-meta-report.md');
+			await this.writeFile(reportPath, report);
+			logger.info('artifacts', `Meta report saved to: ${reportPath}`);
+			return reportPath;
+		} catch (error) {
+			logger.error(
+				'artifacts',
+				`Error saving meta report: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+			throw error;
+		}
+	}
 }
