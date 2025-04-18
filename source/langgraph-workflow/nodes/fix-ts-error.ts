@@ -119,6 +119,24 @@ export const fixTsErrorNode = async (state: WorkflowState): Promise<NodeResult> 
     // Add progress logging for completion
     await logger.progress(file.path, `TS fix applied, ready for validation`, file.retries);
 
+    // Check if we've exceeded max retries
+    if (updatedRetries.ts >= file.maxRetries) {
+      await logger.error(NODE_NAME, `Max TypeScript fix retries (${file.maxRetries}) exceeded`);
+      await logger.progress(file.path, `Failed: Max TypeScript fix retries (${file.maxRetries}) exceeded`, updatedRetries);
+
+      return {
+        file: {
+          ...file,
+          rtlTest: response.testContent.trim(),
+          fixExplanation: response.explanation,
+          retries: updatedRetries,
+          tsFixHistory,
+          status: 'failed',
+          currentStep: WorkflowStep.TS_VALIDATION_FAILED,
+        }
+      };
+    }
+
     return {
       file: {
         ...file,

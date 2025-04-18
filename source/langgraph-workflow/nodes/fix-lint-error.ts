@@ -124,6 +124,25 @@ export const fixLintErrorNode = async (state: WorkflowState): Promise<NodeResult
     // Add progress logging for completion
     await logger.progress(file.path, `Lint fix applied, ready for validation`, file.retries);
 
+    // Check if we've exceeded max retries
+    if (updatedRetries.lint >= file.maxRetries) {
+      await logger.error(NODE_NAME, `Max lint fix retries (${file.maxRetries}) exceeded`);
+      await logger.progress(file.path, `Failed: Max lint fix retries (${file.maxRetries}) exceeded`, updatedRetries);
+
+      return {
+        file: {
+          ...file,
+          rtlTest: response.testContent.trim(),
+          fixExplanation: response.explanation,
+          lintCheck: updatedLintCheck,
+          retries: updatedRetries,
+          lintFixHistory,
+          status: 'failed',
+          currentStep: WorkflowStep.LINT_CHECK_FAILED,
+        }
+      };
+    }
+
     return {
       file: {
         ...file,

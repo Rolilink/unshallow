@@ -25,6 +25,20 @@ export const tsValidationNode = async (state: WorkflowState): Promise<NodeResult
   // Add progress logging
   await logger.progress(file.path, `TypeScript validation`, file.retries);
 
+  // Check if we have already exceeded max retries
+  if (file.retries.ts >= file.maxRetries) {
+    await logger.error(NODE_NAME, `Max TypeScript fix retries (${file.maxRetries}) exceeded`);
+    await logger.progress(file.path, `Failed: Max TypeScript fix retries (${file.maxRetries}) exceeded`, file.retries);
+
+    return {
+      file: {
+        ...file,
+        status: 'failed',
+        currentStep: WorkflowStep.TS_VALIDATION_FAILED,
+      },
+    };
+  }
+
   // Skip if configured to skip TS validation
   if (file.skipTs) {
     await logger.info(NODE_NAME, `Skipped (skipTs enabled)`);

@@ -30,6 +30,20 @@ export const lintCheckNode = async (state: WorkflowState): Promise<NodeResult> =
   // Add progress logging
   await logger.progress(file.path, `Linting check`, file.retries);
 
+  // Check if we have already exceeded max retries
+  if (file.retries.lint >= file.maxRetries) {
+    await logger.error(NODE_NAME, `Max lint fix retries (${file.maxRetries}) exceeded`);
+    await logger.progress(file.path, `Failed: Max lint fix retries (${file.maxRetries}) exceeded`, file.retries);
+
+    return {
+      file: {
+        ...file,
+        status: 'failed',
+        currentStep: WorkflowStep.LINT_CHECK_FAILED,
+      },
+    };
+  }
+
   // Skip if configured to skip lint
   if (file.skipLint) {
     await logger.info(NODE_NAME, `Skipped (skipLint enabled)`);

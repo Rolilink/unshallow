@@ -83,9 +83,9 @@ export class Logger {
 		let attemptInfo = '';
 		if (state.includes('fixing') && state.includes(':')) {
 			const parts = state.split(':');
-			const stageType = parts[0]?.trim(); // e.g., "RTL fixing"
-			const operationType = stageType?.toLowerCase().replace(' ', '_'); // Convert to operation type
-			const attemptNum = this.getAttemptCount(operationType || '');
+			const stageType = parts[0].trim(); // e.g., "RTL fixing"
+			const operationType = stageType.toLowerCase().replace(' ', '_'); // Convert to operation type
+			const attemptNum = this.getAttemptCount(operationType);
 			attemptInfo = ` (Attempt #${attemptNum})`;
 			state = `${stageType}${attemptInfo}: ${parts[1]}`;
 		}
@@ -93,8 +93,9 @@ export class Logger {
 		// Create progress message - always shown regardless of silent mode
 		const message = `[Progress] ${fileName} - ${state}${retryInfo}`;
 
-		// Always log to console regardless of silent setting
-		console.log(message);
+		// Always log to console regardless of silent setting - use process.stdout directly
+		// to bypass the console.log silent setting
+		process.stdout.write(`${message}\n`);
 
 		// Also log to file if available
 		if (this.logsPath) {

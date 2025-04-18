@@ -4,6 +4,8 @@ import { TestFileItem } from './test-file-discovery.js';
 import { MigrateOptions } from '../commands/migrate.js';
 import { WorkflowStep } from '../langgraph-workflow/interfaces/index.js';
 import { logger } from '../langgraph-workflow/utils/logging-callback.js';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 
 /**
  * Result of a single file migration
@@ -137,7 +139,7 @@ export class ParallelMigrationManager {
     }
 
     // Generate summary
-    return {
+    const summary = {
       totalFiles: this.completed.length,
       successful: this.completed.filter(r => r.success).length,
       failed: this.completed.filter(r => !r.success).length,
@@ -145,6 +147,56 @@ export class ParallelMigrationManager {
       totalDuration: Date.now() - startTime,
       results: this.completed
     };
+
+    // Clean up .unshallow directories if all migrations were successful
+    if (summary.failed === 0 && summary.successful > 0) {
+      await this.cleanupAllUnshallowDirs();
+    }
+
+    return summary;
+  }
+
+  /**
+   * Cleans up all .unshallow directories if all migrations were successful
+   */
+  private async cleanupAllUnshallowDirs(): Promise<void> {
+    process.stdout.write('\nAll migrations successful, cleaning up .unshallow directories...\n');
+
+    const unshallowDirs = new Set<string>();
+
+    // Collect all unique .unshallow directories
+    for (const result of this.completed) {
+      const folderDir = path.dirname(result.filePath);
+      const unshallowDir = path.join(folderDir, '.unshallow');
+      unshallowDirs.add(unshallowDir);
+    }
+
+    // Clean up each directory
+    let cleanedCount = 0;
+    for (const dir of unshallowDirs) {
+      try {
+        if (await this.directoryExists(dir)) {
+          await fs.rm(dir, { recursive: true, force: true });
+          cleanedCount++;
+        }
+      } catch (error) {
+        process.stdout.write(`Error cleaning up directory ${dir}: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
+    }
+
+    process.stdout.write(`Cleaned up ${cleanedCount} .unshallow ${cleanedCount === 1 ? 'directory' : 'directories'}\n`);
+  }
+
+  /**
+   * Check if a directory exists
+   */
+  private async directoryExists(dir: string): Promise<boolean> {
+    try {
+      const stats = await fs.stat(dir);
+      return stats.isDirectory();
+    } catch (error) {
+      return false;
+    }
   }
 
   /**
