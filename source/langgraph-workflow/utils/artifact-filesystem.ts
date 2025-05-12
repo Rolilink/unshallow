@@ -38,7 +38,10 @@ export class ArtifactFileSystem {
 	 * @param filePath Path to the file
 	 * @param defaultContent Default content if the file needs to be created
 	 */
-	private async ensureFileExists(filePath: string, defaultContent: string = ''): Promise<void> {
+	private async ensureFileExists(
+		filePath: string,
+		defaultContent: string = '',
+	): Promise<void> {
 		try {
 			// Make sure the directory exists first
 			const directoryPath = path.dirname(filePath);
@@ -125,7 +128,7 @@ export class ArtifactFileSystem {
 				'artifacts',
 				`Error reading temp file for ${testFilePath}: ${
 					error instanceof Error ? error.message : String(error)
-				}`
+				}`,
 			);
 			throw error;
 		}
@@ -150,7 +153,7 @@ export class ArtifactFileSystem {
 				'artifacts',
 				`Error reading plan file for ${testFilePath}: ${
 					error instanceof Error ? error.message : String(error)
-				}`
+				}`,
 			);
 			throw error;
 		}
@@ -165,7 +168,7 @@ export class ArtifactFileSystem {
 		const folderDir = path.dirname(testFilePath);
 		const fileNameWithoutExt = path.basename(
 			testFilePath,
-			path.extname(testFilePath)
+			path.extname(testFilePath),
 		);
 		const componentName = fileNameWithoutExt.replace(/\.(test|spec)$/, '');
 		return path.join(folderDir, '.unshallow', componentName);
@@ -301,13 +304,30 @@ export class ArtifactFileSystem {
 	 */
 	createTempFilePath(originalTestPath: string): string {
 		const folderDir = path.dirname(originalTestPath);
-		const fileNameWithoutExt = path.basename(
-			originalTestPath,
-			path.extname(originalTestPath),
-		);
-		const testExt = path.extname(originalTestPath);
+		const fileExt = path.extname(originalTestPath);
+		const fileName = path.basename(originalTestPath, fileExt);
+		
+		// Extract the test type (test or spec) from the filename
+		const match = fileName.match(/\.(test|spec)$/);
+		const testType = match ? match[1] : null;
+		
+		// Create the correct temp file pattern: fileName.temp.test.tsx
+		let tempFileName;
+		if (testType) {
+			// Remove the .test or .spec suffix and create fileName.temp.test.tsx format
+			const baseFileName = fileName.replace(/\.(test|spec)$/, '');
+			tempFileName = `${baseFileName}.temp.${testType}${fileExt}`;
+		} else {
+			// Fallback for files without test/spec pattern
+			tempFileName = `${fileName}.temp${fileExt}`;
+		}
 
-		return path.join(folderDir, `${fileNameWithoutExt}.temp${testExt}`);
+		console.log(
+			'Creating temp file path:',
+			path.resolve(path.join(folderDir, tempFileName)),
+		);
+
+		return path.resolve(path.join(folderDir, tempFileName));
 	}
 
 	/**
@@ -320,7 +340,7 @@ export class ArtifactFileSystem {
 	async writeToTempFile(
 		originalFilePath: string,
 		content: string,
-		tempFilePath?: string
+		tempFilePath?: string,
 	): Promise<string> {
 		const tempPath = tempFilePath || this.createTempFilePath(originalFilePath);
 
@@ -333,7 +353,7 @@ export class ArtifactFileSystem {
 				'artifacts',
 				`Error writing to temp file ${tempPath}: ${
 					error instanceof Error ? error.message : String(error)
-				}`
+				}`,
 			);
 			throw error;
 		}
@@ -398,7 +418,8 @@ export class ArtifactFileSystem {
 	 */
 	async saveMetaReport(report: string, customPath?: string): Promise<string> {
 		try {
-			const reportPath = customPath || path.join(process.cwd(), 'migration-meta-report.md');
+			const reportPath =
+				customPath || path.join(process.cwd(), 'migration-meta-report.md');
 			await this.writeFile(reportPath, report);
 			logger.info('artifacts', `Meta report saved to: ${reportPath}`);
 			return reportPath;
@@ -407,7 +428,7 @@ export class ArtifactFileSystem {
 				'artifacts',
 				`Error saving meta report: ${
 					error instanceof Error ? error.message : String(error)
-				}`
+				}`,
 			);
 			throw error;
 		}
