@@ -11,6 +11,7 @@ export interface EnrichmentOptions {
 
 /**
  * Component information extracted from test
+ * @deprecated Use File interface from types.ts instead
  */
 export interface TestedComponent {
   /** Component name */
@@ -25,6 +26,7 @@ export interface TestedComponent {
 
 /**
  * Import information structure
+ * @deprecated Use File interface from types.ts instead
  */
 export interface ImportInfo {
   /** Name of the import */
@@ -43,26 +45,6 @@ export interface ImportInfo {
   isComponent?: boolean;
 }
 
-/**
- * Enriched context output
- */
-export interface EnrichedContext {
-  /** The identified component under test */
-  testedComponent: TestedComponent;
-
-  /** Direct component and related imports with structured info */
-  imports: ImportInfo[];
-
-  /** Optional example tests */
-  exampleTests?: Map<string, string>; // path -> content
-
-  /** Optional extra context */
-  extraContext?: string;
-
-  // Keep original Maps for backward compatibility during transition
-  /** @deprecated Use imports instead */
-  componentImports?: Map<string, string>; // path -> content
-
-  /** @deprecated Use imports instead */
-  relatedFiles?: Map<string, string>; // path -> content
-}
+// Original interface is now deprecated - use types.ts version instead
+// @ts-ignore - keeping for backward compatibility
+export type { EnrichedContext } from '../../types.js';

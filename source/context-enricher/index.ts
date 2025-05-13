@@ -3,9 +3,10 @@ import * as path from 'path';
 import * as ts from 'typescript';
 import {
 	EnrichmentOptions,
-	EnrichedContext,
 	ImportInfo,
+	TestedComponent,
 } from './interfaces/index.js';
+import { EnrichedContext } from '../types.js';
 import {resolveImportPath, fileExists} from './utils/file-utils.js';
 import {ConfigManager} from '../config/config-manager.js';
 import * as fsSync from 'fs';

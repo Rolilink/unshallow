@@ -1,4 +1,5 @@
-import { EnrichedContext, WorkflowOptions, WorkflowState, WorkflowStep } from './interfaces/index.js';
+import { LegacyEnrichedContext as EnrichedContext, WorkflowOptions, WorkflowState, WorkflowStep } from './interfaces/index.js';
+import { EnrichedContext as NewEnrichedContext } from '../types.js';
 import { lintCheckNode } from './nodes/lint-check.js';
 import { fixLintErrorNode } from './nodes/fix-lint-error.js';
 import * as fs from 'fs/promises';

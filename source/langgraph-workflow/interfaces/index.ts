@@ -44,6 +44,7 @@ export interface WorkflowOptions {
 
 /**
  * Component information from the context enricher
+ * @deprecated Use File interface from types.ts instead
  */
 export interface Component {
   name: string;
@@ -53,6 +54,7 @@ export interface Component {
 
 /**
  * Import information structure
+ * @deprecated Use File interface from types.ts instead
  */
 export interface ImportInfo {
   name: string;            // Name of the import (e.g., component or utility name)
@@ -62,13 +64,18 @@ export interface ImportInfo {
   isComponent?: boolean;   // Whether this is the component being tested
 }
 
+// Import the new EnrichedContext from types.ts
+// @ts-ignore - keeping deprecated interface for backward compatibility
+export type { EnrichedContext } from '../../types.js';
+
+// Legacy interface for backward compatibility
 /**
- * Simplified context structure derived from the context enricher
+ * @deprecated Use EnrichedContext from types.ts instead
  */
-export interface EnrichedContext {
+export interface LegacyEnrichedContext {
   componentName: string;
   componentCode: string;
-  imports: ImportInfo[]; // New structured imports array
+  imports: ImportInfo[];
   examples?: Record<string, string>;
   extraContext?: string;
 }

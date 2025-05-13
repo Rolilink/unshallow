@@ -1,9 +1,10 @@
 import {
-	EnrichedContext,
+	LegacyEnrichedContext,
 	WorkflowOptions,
 	WorkflowState,
 	WorkflowStep,
 } from './interfaces/index.js';
+import { EnrichedContext } from '../types.js';
 import {loadTestFileNode} from './nodes/load-test-file.js';
 import {applyContextNode} from './nodes/apply-context.js';
 import {planRtlConversionNode} from './nodes/plan-rtl-conversion.js';
@@ -207,7 +208,7 @@ const enzymeToRtlConverterGraph = graph.compile();
  */
 export function createWorkflow(
 	testFilePath: string,
-	context: EnrichedContext,
+	context: LegacyEnrichedContext,
 	options: WorkflowOptions = {},
 ): {initialState: WorkflowState; execute: () => Promise<WorkflowState>} {
 	const maxRetries = options.maxRetries || 8;
@@ -315,7 +316,7 @@ export function createWorkflow(
  */
 export async function processSingleFile(
 	testFilePath: string,
-	context: EnrichedContext,
+	context: LegacyEnrichedContext,
 	options: WorkflowOptions = {},
 ): Promise<WorkflowState> {
 	// Set up the .unshallow directory for logging and temporary files
