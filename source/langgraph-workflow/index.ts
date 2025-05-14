@@ -1,10 +1,9 @@
 import {
-	LegacyEnrichedContext,
 	WorkflowOptions,
 	WorkflowState,
 	WorkflowStep,
 } from './interfaces/index.js';
-import { EnrichedContext } from '../types.js';
+import {EnrichedContext} from '../types.js';
 import {loadTestFileNode} from './nodes/load-test-file.js';
 import {applyContextNode} from './nodes/apply-context.js';
 import {planRtlConversionNode} from './nodes/plan-rtl-conversion.js';
@@ -25,17 +24,12 @@ import {
 	hasLintCheckPassed,
 	hasExceededRetries,
 } from './edges.js';
-import {
-	Annotation,
-	END,
-	START,
-	StateGraph,
-} from '@langchain/langgraph';
+import {Annotation, END, START, StateGraph} from '@langchain/langgraph';
 import {getLangfuseCallbackHandler} from '../langfuse.js';
 import {logger} from './utils/logging-callback.js';
 import {TestFileSystem} from './utils/test-filesystem.js';
 import {ArtifactFileSystem} from './utils/artifact-filesystem.js';
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 
 // Initialize filesystem helpers
 const testFileSystem = new TestFileSystem();
@@ -148,7 +142,10 @@ graph
 			}
 
 			// Fallback - should not happen
-			logger.info('workflow', 'Unexpected state in analyze_test_errors condition');
+			logger.info(
+				'workflow',
+				'Unexpected state in analyze_test_errors condition',
+			);
 			return 'validate_typescript';
 		},
 		{
@@ -208,10 +205,11 @@ const enzymeToRtlConverterGraph = graph.compile();
  */
 export function createWorkflow(
 	testFilePath: string,
-	context: LegacyEnrichedContext,
+	context: EnrichedContext,
 	options: WorkflowOptions = {},
 ): {initialState: WorkflowState; execute: () => Promise<WorkflowState>} {
 	const maxRetries = options.maxRetries || 8;
+	const langfuseId = uuidv4();
 
 	// Initial file state
 	const initialState: WorkflowState = {
@@ -220,13 +218,7 @@ export function createWorkflow(
 			content: '',
 			status: 'pending',
 			currentStep: WorkflowStep.INITIALIZE,
-			context: {
-				componentName: context.componentName,
-				componentCode: context.componentCode,
-				imports: context.imports || [],
-				examples: context.examples,
-				extraContext: context.extraContext,
-			}, // Context from ContextEnricher
+			context, // Context from EnrichedContext
 			retries: {
 				rtl: 0,
 				test: 0,
@@ -282,9 +274,12 @@ export function createWorkflow(
 			});
 
 			// Log final progress
-			logger.progress(testFilePath,
-				`Migration ${result.file.status === 'success' ? 'succeeded' : 'failed'}`,
-				result.file.retries
+			logger.progress(
+				testFilePath,
+				`Migration ${
+					result.file.status === 'success' ? 'succeeded' : 'failed'
+				}`,
+				result.file.retries,
 			);
 
 			return result as WorkflowState;
@@ -316,7 +311,7 @@ export function createWorkflow(
  */
 export async function processSingleFile(
 	testFilePath: string,
-	context: LegacyEnrichedContext,
+	context: EnrichedContext,
 	options: WorkflowOptions = {},
 ): Promise<WorkflowState> {
 	// Set up the .unshallow directory for logging and temporary files

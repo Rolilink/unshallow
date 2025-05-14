@@ -225,41 +225,28 @@ export class ParallelMigrationManager {
 				const originalEnzymeContent = await fs.readFile(file.path, 'utf8');
 
 				// Process the file with the retry flag if temp file exists
-				const result = await processSingleFile(
-					file.path,
-					{
-						componentName:
-							enrichedContext.testedComponent?.name || 'UnknownComponent',
-						componentCode: enrichedContext.testedComponent?.content || '',
-						imports: enrichedContext.imports || [],
-						examples: enrichedContext.exampleTests
-							? Object.fromEntries(enrichedContext.exampleTests)
-							: {},
-						extraContext: enrichedContext.extraContext || '',
-					},
-					{
-						// Pass all options from the command line
-						maxRetries: parseInt(this.options.maxRetries || '8', 10),
-						skipTs: this.options.skipTsCheck || false,
-						skipLint: this.options.skipLintCheck || false,
-						skipTest: this.options.skipTestRun || false,
-						lintCheckCmd: this.options.lintCheckCmd,
-						lintFixCmd: this.options.lintFixCmd,
-						tsCheckCmd: this.options.tsCheckCmd,
-						testCmd: this.options.testCmd,
-						// Set retry flag based on temp file existence
-						retry: this.options.retry && file.hasTempFile,
-						// Pass reasoning flags
-						reasoningPlanning:
-							this.options.reasoningPlanning || this.options.reasoning,
-						reasoningExecution:
-							this.options.reasoningExecution || this.options.reasoning,
-						reasoningReflection:
-							this.options.reasoningReflection || this.options.reasoning,
-						// Enable silent mode to prevent console output from nodes
-						silent: true,
-					},
-				);
+				const result = await processSingleFile(file.path, enrichedContext, {
+					// Pass all options from the command line
+					maxRetries: parseInt(this.options.maxRetries || '8', 10),
+					skipTs: this.options.skipTsCheck || false,
+					skipLint: this.options.skipLintCheck || false,
+					skipTest: this.options.skipTestRun || false,
+					lintCheckCmd: this.options.lintCheckCmd,
+					lintFixCmd: this.options.lintFixCmd,
+					tsCheckCmd: this.options.tsCheckCmd,
+					testCmd: this.options.testCmd,
+					// Set retry flag based on temp file existence
+					retry: this.options.retry && file.hasTempFile,
+					// Pass reasoning flags
+					reasoningPlanning:
+						this.options.reasoningPlanning || this.options.reasoning,
+					reasoningExecution:
+						this.options.reasoningExecution || this.options.reasoning,
+					reasoningReflection:
+						this.options.reasoningReflection || this.options.reasoning,
+					// Enable silent mode to prevent console output from nodes
+					silent: true,
+				});
 
 				// Track the retry counts for this file
 				const retries = {
@@ -288,17 +275,6 @@ export class ParallelMigrationManager {
 					testResult: result.file.testResult,
 					tsCheck: result.file.tsCheck,
 					lintCheck: result.file.lintCheck,
-
-					// Add additional data for meta report
-					originalEnzymeContent,
-					rtlTestContent: result.file.rtlTest,
-					planContent: result.file.fixPlan?.plan,
-					componentName: enrichedContext.testedComponent?.name,
-					componentContent: enrichedContext.testedComponent?.content,
-					accessibilitySnapshot: result.file.accessibilityDump,
-					domTree: result.file.domTree,
-					imports: enrichedContext.imports,
-					userContext: enrichedContext.extraContext,
 				};
 			} catch (error) {
 				return {
