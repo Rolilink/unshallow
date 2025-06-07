@@ -48,9 +48,6 @@ export interface WorkflowOptions {
  */
 export enum WorkflowStep {
 	INITIALIZE = 'INITIALIZE',
-	LOAD_TEST_FILE = 'LOAD_TEST_FILE',
-	LOAD_TEST_FILE_FAILED = 'LOAD_TEST_FILE_FAILED',
-	APPLY_CONTEXT = 'APPLY_CONTEXT',
 	PLAN_RTL_CONVERSION = 'PLAN_RTL_CONVERSION',
 	EXECUTE_RTL_CONVERSION = 'EXECUTE_RTL_CONVERSION',
 	CONVERT_TO_RTL = 'CONVERT_TO_RTL',
@@ -210,6 +207,7 @@ export interface FileState {
  * Main workflow state
  */
 export interface WorkflowState {
+	id: string;
 	file: FileState;
 }
 

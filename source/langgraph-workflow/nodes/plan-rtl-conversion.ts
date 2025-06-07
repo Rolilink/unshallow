@@ -4,10 +4,10 @@ import {PromptTemplate} from '@langchain/core/prompts';
 import {callOpenAIStructured} from '../utils/openai.js';
 import {planRtlConversionPrompt} from '../prompts/plan-rtl-conversion-prompt.js';
 import {z} from 'zod';
-import {formatImports} from '../utils/format-utils.js';
 import {logger} from '../utils/logging-callback.js';
 import {TestFileSystem} from '../utils/test-filesystem.js';
 import {ArtifactFileSystem} from '../utils/artifact-filesystem.js';
+import {getPlanRtlConversionVars} from '../utils/context-formatter.js';
 
 // Initialize filesystem helpers
 const testFileSystem = new TestFileSystem();
@@ -45,17 +45,11 @@ export const planRtlConversionNode = async (
 	await logger.logNodeStart(NODE_NAME, `Planning RTL conversion`);
 
 	try {
+		// Get prompt variables using the context formatter
+		const promptVars = getPlanRtlConversionVars(state);
+
 		// Format the prompt using the template without code block formatting
-		const formattedPrompt = await planRtlConversionTemplate.format({
-			testFile: file.content, // Use content directly
-			componentName: file.context.componentName,
-			componentSourceCode: file.context.componentCode, // Use component code directly
-			componentFileImports: formatImports(file.context.imports),
-			userProvidedContext: file.context.extraContext || '',
-			supportingExamples: file.context.examples
-				? JSON.stringify(file.context.examples)
-				: '',
-		});
+		const formattedPrompt = await planRtlConversionTemplate.format(promptVars);
 
 		await logger.info(NODE_NAME, `Calling OpenAI to plan conversion`);
 
@@ -63,9 +57,8 @@ export const planRtlConversionNode = async (
 		const response = await callOpenAIStructured({
 			prompt: formattedPrompt,
 			schema: PlanRtlConversionOutputSchema,
-			// Use o4-mini if reasoningPlanning is enabled
-			model: state.file.reasoningPlanning ? 'o4-mini' : 'gpt-4.1',
 			nodeName: 'plan_rtl_conversion',
+			runId: state.id,
 		});
 
 		// Log the plan and explanation

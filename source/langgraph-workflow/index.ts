@@ -4,8 +4,6 @@ import {
 	WorkflowStep,
 } from './interfaces/index.js';
 import {EnrichedContext} from '../types.js';
-import {loadTestFileNode} from './nodes/load-test-file.js';
-import {applyContextNode} from './nodes/apply-context.js';
 import {planRtlConversionNode} from './nodes/plan-rtl-conversion.js';
 import {executeRtlConversionNode} from './nodes/execute-rtl-conversion.js';
 import {runTestNode} from './nodes/run-test.js';
@@ -30,6 +28,7 @@ import {logger} from './utils/logging-callback.js';
 import {TestFileSystem} from './utils/test-filesystem.js';
 import {ArtifactFileSystem} from './utils/artifact-filesystem.js';
 import {v4 as uuidv4} from 'uuid';
+import * as fsSync from 'fs';
 
 // Initialize filesystem helpers
 const testFileSystem = new TestFileSystem();
@@ -42,10 +41,8 @@ const WorkflowStateAnnotation = Annotation.Root({
 
 export const graph = new StateGraph(WorkflowStateAnnotation);
 
-// Add all nodes to the graph
+// Add all nodes to the graph (without load_test_file and apply_context)
 graph
-	.addNode('load_test_file', loadTestFileNode)
-	.addNode('apply_context', applyContextNode)
 	.addNode('plan_rtl_conversion', planRtlConversionNode)
 	.addNode('execute_rtl_conversion', executeRtlConversionNode)
 	.addNode('run_test', runTestNode)
@@ -57,29 +54,39 @@ graph
 	.addNode('analyze_test_errors', analyzeTestErrorsNode)
 	.addNode('analyze_failure', analyzeFailureNode)
 	.addNode('execute_rtl_fix', executeRtlFixNode)
-	.addEdge(START, 'load_test_file')
+	// Start directly with plan_rtl_conversion by default
+	.addEdge(START, 'plan_rtl_conversion')
+	// Add conditional start edge based on current step
 	.addConditionalEdges(
-		'load_test_file',
-		state => (state.file.status === 'failed' ? 'end' : 'apply_context'),
-		{
-			end: END,
-			apply_context: 'apply_context',
-		},
-	)
-	// Check if we should skip planning and execution in retry mode
-	.addConditionalEdges(
-		'apply_context',
+		START,
 		state => {
-			// In retry mode with a valid rtlTest, skip to run_test
-			if (state.file.retryMode && state.file.rtlTest) {
-				return 'run_test';
+			// Determine the starting node based on the current step in state
+			switch (state.file.currentStep) {
+				case WorkflowStep.RUN_TEST:
+					return 'run_test';
+				case WorkflowStep.ANALYZE_TEST_ERRORS:
+					return 'analyze_test_errors';
+				case WorkflowStep.ANALYZE_FAILURE:
+					return 'analyze_failure';
+				case WorkflowStep.TS_VALIDATION:
+					return 'ts_validation';
+				case WorkflowStep.LINT_CHECK:
+					return 'lint_check';
+				default:
+					// Check if we have a valid rtlTest in retry mode
+					if (state.file.retryMode && state.file.rtlTest) {
+						return 'run_test';
+					}
+					return 'plan_rtl_conversion';
 			}
-			// Otherwise continue with normal planning
-			return 'plan_rtl_conversion';
 		},
 		{
-			run_test: 'run_test',
 			plan_rtl_conversion: 'plan_rtl_conversion',
+			run_test: 'run_test',
+			analyze_test_errors: 'analyze_test_errors',
+			analyze_failure: 'analyze_failure',
+			ts_validation: 'ts_validation',
+			lint_check: 'lint_check',
 		},
 	)
 	.addConditionalEdges(
@@ -209,15 +216,103 @@ export function createWorkflow(
 	options: WorkflowOptions = {},
 ): {initialState: WorkflowState; execute: () => Promise<WorkflowState>} {
 	const maxRetries = options.maxRetries || 8;
-	const langfuseId = uuidv4();
+	const retryMode = options.retry || false;
 
-	// Initial file state
+	/**
+	 * Helper function to load test file content synchronously
+	 */
+	const loadTestFile = (filePath: string): {content: string; error?: Error} => {
+		try {
+			// Use synchronous file reading since we're initializing the workflow
+			const content = fsSync.readFileSync(filePath, 'utf8');
+			logger.info(
+				'workflow',
+				`Loaded test file: ${filePath} (${content.length} characters)`,
+			);
+			return {content};
+		} catch (err) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			logger.error('workflow', `Failed to load test file: ${filePath}`, error);
+			return {content: '', error};
+		}
+	};
+
+	// Initialize a TestFileSystem instance for retry mode handling
+	const testFs = new TestFileSystem();
+
+	// Load the test file content (either original or attempt file in retry mode)
+	let fileContent = '';
+	let fileError: Error | undefined;
+	let originalTest = '';
+	let rtlTest: string | undefined;
+
+	if (retryMode && testFs.attemptFileExists(testFilePath)) {
+		// In retry mode, try to load the attempt file from .unshallow directory
+		try {
+			const attemptContent = fsSync.readFileSync(
+				testFs.getAttemptFilePath(
+					testFilePath,
+					testFs.getTestDirectoryPath(testFilePath),
+				),
+				'utf8',
+			);
+
+			// Load original file to keep the original test content
+			const originalContent = fsSync.readFileSync(testFilePath, 'utf8');
+
+			fileContent = originalContent; // Current file content (original)
+			originalTest = originalContent; // Original enzyme test
+			rtlTest = attemptContent; // Previously attempted RTL test
+
+			logger.info(
+				'workflow',
+				`Loaded attempt file for retry mode (${attemptContent.length} characters)`,
+			);
+		} catch (err) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			logger.error(
+				'workflow',
+				`Failed to load attempt file in retry mode`,
+				error,
+			);
+
+			// Fall back to loading the original file
+			const {content, error: loadError} = loadTestFile(testFilePath);
+			fileContent = content;
+			fileError = loadError;
+			originalTest = content;
+		}
+	} else {
+		// Normal mode: just load the original file
+		const {content, error: loadError} = loadTestFile(testFilePath);
+		fileContent = content;
+		fileError = loadError;
+		originalTest = content;
+	}
+
+	// Determine initial step based on options and retry mode
+	let initialStep = WorkflowStep.INITIALIZE;
+
+	if (fileError) {
+		initialStep = WorkflowStep.INITIALIZE; // Keep at initialize if there's an error
+	} else if (retryMode && rtlTest) {
+		// In retry mode with valid RTL test, start with running the test
+		initialStep = WorkflowStep.RUN_TEST;
+	}
+
+	// Generate a unique ID for this workflow run (not from state)
+	const workflowRunId = `workflow-${uuidv4()}`;
+
+	// Initial file state with file already loaded
 	const initialState: WorkflowState = {
+		id: workflowRunId,
 		file: {
 			path: testFilePath,
-			content: '',
-			status: 'pending',
-			currentStep: WorkflowStep.INITIALIZE,
+			content: fileContent,
+			originalTest: originalTest,
+			rtlTest: rtlTest,
+			status: fileError ? 'failed' : 'pending',
+			currentStep: initialStep,
 			context, // Context from EnrichedContext
 			retries: {
 				rtl: 0,
@@ -227,28 +322,18 @@ export function createWorkflow(
 			},
 			maxRetries,
 			commands: {
-				lintCheck: options.lintCheckCmd || 'yarn lint:check',
-				lintFix: options.lintFixCmd || 'yarn lint:fix',
-				tsCheck: options.tsCheckCmd || 'yarn ts:check',
-				test: options.testCmd || 'yarn test',
+				lintCheck: options.lintCheckCmd || 'npm run lint',
+				lintFix: options.lintFixCmd || 'npm run lint:fix',
+				tsCheck: options.tsCheckCmd || 'npm run ts-check',
+				test: options.testCmd || 'npm test',
 			},
-			originalTest: '',
-			skipTs: options?.skipTs || false,
-			skipLint: options?.skipLint || false,
-			skipTest: options?.skipTest || false,
-
-			// Initialize fix loop state
-			trackedErrors: {},
-			totalAttempts: 0,
-			accessibilityDump: '',
-
-			// Pass reasoning flags to file state for access in nodes
-			reasoningPlanning: options?.reasoningPlanning || false,
-			reasoningExecution: options?.reasoningExecution || false,
-			reasoningReflection: options?.reasoningReflection || false,
-
-			// Set retry mode flag
-			retryMode: options?.retry || false,
+			skipTs: options.skipTs || false,
+			skipLint: options.skipLint || false,
+			skipTest: options.skipTest || false,
+			reasoningPlanning: options.reasoningPlanning || false,
+			reasoningExecution: options.reasoningExecution || false,
+			reasoningReflection: options.reasoningReflection || false,
+			retryMode: retryMode,
 		},
 	};
 
@@ -257,20 +342,23 @@ export function createWorkflow(
 	 */
 	const execute = async (): Promise<WorkflowState> => {
 		try {
-			// Generate a unique ID for this workflow run
-			const workflowRunId = `workflow-${uuidv4()}`;
-
-			// Get the Langfuse callback handler
+			// Get the Langfuse callback handler (no parameter)
 			const langfuseCallbackHandler = await getLangfuseCallbackHandler();
 
 			// Log initial progress
 			logger.progress(testFilePath, 'Starting migration');
 
+			// If we failed to load the file, return immediately
+			if (fileError) {
+				logger.error('workflow', 'Failed to load test file, aborting workflow');
+				return initialState;
+			}
+
 			// Execute the graph with the initial state
 			const result = await enzymeToRtlConverterGraph.invoke(initialState, {
 				callbacks: langfuseCallbackHandler ? [langfuseCallbackHandler] : [],
 				recursionLimit: 200,
-				runId: workflowRunId, // Pass unique run ID to LangGraph
+				runId: initialState.id, // Pass unique run ID to LangGraph
 			});
 
 			// Log final progress
@@ -290,6 +378,7 @@ export function createWorkflow(
 			logger.progress(testFilePath, 'Migration failed with error');
 
 			return {
+				id: initialState.id,
 				file: {
 					...initialState.file,
 					status: 'failed',
@@ -318,76 +407,78 @@ export async function processSingleFile(
 	const testDirectoryPaths = await testFileSystem.setupTestDirectory(
 		testFilePath,
 	);
-	const {unshallowDir, testDir, tempPath, attemptPath} = testDirectoryPaths;
+	const {unshallowDir, testDir} = testDirectoryPaths;
 
 	// Initialize the logs file
-	const logsPath = await artifactFileSystem.initializeLogsFile(testDir);
+	const logsFilePath = await artifactFileSystem.initializeLogsFile(testDir);
 
 	// Configure the logger with the logs file path
-	logger.setLogsPath(logsPath);
+	logger.setLogsPath(logsFilePath);
 
 	// Set logger silent mode if specified
 	if (options.silent) {
 		logger.setSilent(true);
 	}
 
-	logger.info('workflow', `Starting migration for ${testFilePath}`);
+	logger.info('workflow', `Starting migration for test: ${testFilePath}`);
+	logger.info('workflow', `Logs will be written to: ${logsFilePath}`);
+	logger.info('workflow', `.unshallow directory: ${unshallowDir}`);
+	logger.info('workflow', `Component directory: ${testDir}`);
 
-	// Create the workflow with the unshallow directory paths
-	const workflow = createWorkflow(testFilePath, context, options);
+	// Initialize the workflow with the test file
+	const workflow = createWorkflow(testFilePath, context, {
+		...options,
+	});
 
-	// Update the initial state with the unshallow paths
-	workflow.initialState.file = {
-		...workflow.initialState.file,
-		unshallowDir,
-		testDir,
-		logsPath,
-		attemptPath,
-	};
+	// Start timer to track execution time
+	const startTime = Date.now();
 
-	try {
-		// Execute the workflow
-		const result = await workflow.execute();
+	// Execute the workflow
+	logger.info('workflow', 'Starting workflow execution');
+	const finalState = await workflow.execute();
+	logger.info('workflow', 'Workflow execution complete');
 
-		// If the migration was successful, replace the original file and clean up
-		if (result.file.status === 'success' && result.file.rtlTest) {
-			logger.success('workflow', 'Migration completed successfully');
+	// Calculate execution time
+	const executionTimeMs = Date.now() - startTime;
+	const executionTimeSec = Math.round(executionTimeMs / 1000);
+	logger.info('workflow', `Total execution time: ${executionTimeSec} seconds`);
 
-			// Replace the original file with the RTL test
-			await import('fs/promises').then(fs =>
-				fs.writeFile(testFilePath, result.file.rtlTest!),
+	// Handle the final state based on the status
+	if (finalState.file.status === 'success') {
+		logger.success('workflow', `Migration successful for: ${testFilePath}`);
+
+		// Save the result to the original file
+		if (finalState.file.rtlTest) {
+			// Update original file with the RTL test and finalize (success)
+			await artifactFileSystem.finalizeMigration(
+				testFilePath,
+				finalState.file.rtlTest,
+				testDir,
+				'success',
 			);
 
-			// Clean up the temporary files and test directory
-			await artifactFileSystem.cleanupTempFile(tempPath);
+			// Clean up the test directory if successful
 			await testFileSystem.cleanupTestDirectory(testDir);
-		} else {
-			logger.info(
-				'workflow',
-				`Migration completed with status: ${result.file.status}`,
-			);
-
-			// If the migration failed but we have a partial result, save it to the attempt file
-			if (result.file.rtlTest) {
-				await artifactFileSystem.saveAttemptFile(
-					testDir,
-					testFilePath,
-					result.file.rtlTest,
-				);
-			}
 		}
+	} else if (finalState.file.status === 'failed') {
+		logger.error(
+			'workflow',
+			`Migration failed for: ${testFilePath}`,
+			finalState.file.error,
+		);
 
-		return result;
-	} catch (error) {
-		logger.error('workflow', 'Migration failed with error', error);
-
-		return {
-			file: {
-				...workflow.initialState.file,
-				status: 'failed',
-				error: error instanceof Error ? error : new Error(String(error)),
-				currentStep: WorkflowStep.INITIALIZE,
-			},
-		};
+		// Save the attempt for failed migrations
+		if (finalState.file.rtlTest) {
+			// Update original file with the RTL test but mark as failed
+			// This also saves a copy to the .unshallow directory
+			await artifactFileSystem.finalizeMigration(
+				testFilePath,
+				finalState.file.rtlTest,
+				testDir,
+				'failed',
+			);
+		}
 	}
+
+	return finalState;
 }

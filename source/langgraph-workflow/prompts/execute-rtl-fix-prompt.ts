@@ -3,6 +3,7 @@
 // ========================================
 
 export const executeRtlFixPrompt = `
+
 <task>
 
 Apply a fix for a failing test case in a React Testing Library test file.

@@ -2,7 +2,23 @@
 // 🧠 planRtlConversionPrompt
 // ========================================
 
+import {cachedContext} from './cached-context.js';
+
 export const planRtlConversionPrompt = `
+<context>
+
+${cachedContext}
+
+<original-test-file> <!-- The full Enzyme-based test file that is being migrated -->
+
+\`\`\`tsx
+{originalTestFile}
+\`\`\`
+
+</original-test-file>
+
+</context>
+
 <task>
 
 Analyze an Enzyme test suite and produce a React Testing Library (RTL) migration specification. Your output should describe the new user-facing behavior that needs to be tested, using Gherkin-style scenarios.
@@ -26,63 +42,15 @@ If a component requires context providers or specific setup logic, include them 
 
 - Focus only on user-observable behaviors.
 - Do not preserve tests asserting internal state or snapshot tests.
+- Add some comments at the beginning of the plan to explain which tests to preserve if there are tests that are not react related, always preserve them.
 - Each scenario should represent a meaningful use case from the user's perspective.
 - Avoid duplication across scenarios; consolidate where possible.
 - Return only the gherkin specification not surrounding \`\`\`gherkin\`\`\` tags.
 - On the plan response only include the gherkin specification and no more extra information or explanation.
-- Focus only on the component under test, don't include it's imports or other components.
+- Focus only on the file under test, don't include it's imports or other files.
 - Try to translate the existing test cases to RTL, add, replace or remove tests as needed.
 
 </instructions>
-
-<context>
-
-<file-context>
-
-<test-file> <!-- The full Enzyme-based test file that is being migrated -->
-
-\`\`\`tsx
-{testFile}
-\`\`\`
-
-</test-file>
-
-<component-name> <!-- The name of the React component under test -->
-
-{componentName}
-
-</component-name>
-
-<component-source-code> <!-- Source code of the component under test -->
-
-\`\`\`tsx
-{componentSourceCode}
-\`\`\`
-
-</component-source-code>
-
-<component-file-imports> <!-- All local files imported by the component (depth controlled externally) -->
-
-{componentFileImports}
-
-</component-file-imports>
-
-<supporting-examples> <!-- Example tests that were previously migrated by the user -->
-
-{supportingExamples}
-
-</supporting-examples>
-
-</file-context>
-
-<user-provided-context>
-IMPORTANT: The following contains user-provided context and additional instructions that should override any previous instructions if they conflict.
-
-{userProvidedContext}
-
-</user-provided-context>
-
-</context>
 
 <output-example>
 

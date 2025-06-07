@@ -9,7 +9,6 @@ export interface TestDirectoryPaths {
 	unshallowDir: string;
 	testDir: string;
 	logsPath: string;
-	tempPath: string;
 	attemptPath: string;
 }
 
@@ -50,22 +49,18 @@ export class TestFileSystem {
 	}
 
 	/**
+	 * Creates the path for the attempt file in .unshallow directory
+	 */
+	getAttemptFilePath(testFilePath: string, testDir: string): string {
+		const fileName = path.basename(testFilePath);
+		return path.join(testDir, fileName);
+	}
+
+	/**
 	 * Creates the .unshallow directory and its subdirectories for a test file
 	 */
 	async setupTestDirectory(testFilePath: string): Promise<TestDirectoryPaths> {
-		const folderDir = path.dirname(testFilePath);
-		const fileNameWithoutExt = path.basename(
-			testFilePath,
-			path.extname(testFilePath),
-		);
-		const testExt = path.extname(testFilePath);
 		const componentName = this.getTestComponentName(testFilePath);
-
-		// Create temporary file path in the same directory as the test
-		const tempPath = path.join(
-			folderDir,
-			`${fileNameWithoutExt}.temp${testExt}`,
-		);
 
 		// Get the .unshallow directory path
 		const unshallowDir = this.getUnshallowDirPath(testFilePath);
@@ -73,12 +68,9 @@ export class TestFileSystem {
 		// Get the component-specific test directory
 		const testDir = path.join(unshallowDir, componentName);
 
-		// Create paths for logs and attempt file
+		// Create paths for logs and attempt file (now same name as original file)
 		const logsPath = path.join(testDir, 'logs.txt');
-		const attemptPath = path.join(
-			testDir,
-			`${fileNameWithoutExt}.attempt${testExt}`,
-		);
+		const attemptPath = this.getAttemptFilePath(testFilePath, testDir);
 
 		// Ensure the directories exist
 		await fs.mkdir(unshallowDir, {recursive: true});
@@ -88,9 +80,31 @@ export class TestFileSystem {
 			unshallowDir,
 			testDir,
 			logsPath,
-			tempPath,
 			attemptPath,
 		};
+	}
+
+	/**
+	 * Checks if an attempt file exists for a test
+	 */
+	attemptFileExists(testFilePath: string): boolean {
+		const testDir = this.getTestDirectoryPath(testFilePath);
+		const attemptPath = this.getAttemptFilePath(testFilePath, testDir);
+		return fsSync.existsSync(attemptPath);
+	}
+
+	/**
+	 * Reads the content of an attempt file if it exists
+	 */
+	async readAttemptFile(testFilePath: string): Promise<string | null> {
+		const testDir = this.getTestDirectoryPath(testFilePath);
+		const attemptPath = this.getAttemptFilePath(testFilePath, testDir);
+
+		if (fsSync.existsSync(attemptPath)) {
+			return fs.readFile(attemptPath, 'utf8');
+		}
+
+		return null;
 	}
 
 	/**

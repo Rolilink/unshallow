@@ -89,16 +89,6 @@ export class ArtifactFileSystem {
 	}
 
 	/**
-	 * Checks if a temporary file exists for the given test file
-	 * @param testFilePath The original test file path
-	 * @returns boolean indicating if the temp file exists
-	 */
-	public checkTempFileExists(testFilePath: string): boolean {
-		const tempFilePath = this.createTempFilePath(testFilePath);
-		return fsSync.existsSync(tempFilePath);
-	}
-
-	/**
 	 * Checks if a plan file exists for the given test file
 	 * @param testFilePath The original test file path
 	 * @returns boolean indicating if the plan file exists
@@ -108,30 +98,6 @@ export class ArtifactFileSystem {
 		const planFilePath = path.join(testDir, 'plan.txt');
 
 		return fsSync.existsSync(planFilePath);
-	}
-
-	/**
-	 * Reads the content of a temporary file for the given test file
-	 * @param testFilePath The original test file path
-	 * @returns The content of the temp file
-	 */
-	public async readTempFile(testFilePath: string): Promise<string> {
-		const tempFilePath = this.createTempFilePath(testFilePath);
-
-		try {
-			if (!fsSync.existsSync(tempFilePath)) {
-				throw new Error(`Temp file does not exist for test: ${testFilePath}`);
-			}
-			return await fs.readFile(tempFilePath, 'utf8');
-		} catch (error) {
-			logger.error(
-				'artifacts',
-				`Error reading temp file for ${testFilePath}: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			);
-			throw error;
-		}
 	}
 
 	/**
@@ -275,18 +241,12 @@ export class ArtifactFileSystem {
 		content: string,
 	): Promise<string> {
 		try {
-			const fileNameWithoutExt = path.basename(
-				originalTestPath,
-				path.extname(originalTestPath),
-			);
-			const testExt = path.extname(originalTestPath);
-
-			const attemptPath = path.join(
-				testDir,
-				`${fileNameWithoutExt}.attempt${testExt}`,
-			);
+			// Use the original filename for the attempt file
+			const fileName = path.basename(originalTestPath);
+			const attemptPath = path.join(testDir, fileName);
 
 			await this.writeFile(attemptPath, content);
+			logger.info('artifacts', `Saved attempt file to: ${attemptPath}`);
 			return attemptPath;
 		} catch (error) {
 			logger.error(
@@ -296,117 +256,6 @@ export class ArtifactFileSystem {
 				}`,
 			);
 			throw error;
-		}
-	}
-
-	/**
-	 * Creates a path for a temporary file
-	 */
-	createTempFilePath(originalTestPath: string): string {
-		const folderDir = path.dirname(originalTestPath);
-		const fileExt = path.extname(originalTestPath);
-		const fileName = path.basename(originalTestPath, fileExt);
-		
-		// Extract the test type (test or spec) from the filename
-		const match = fileName.match(/\.(test|spec)$/);
-		const testType = match ? match[1] : null;
-		
-		// Create the correct temp file pattern: fileName.temp.test.tsx
-		let tempFileName;
-		if (testType) {
-			// Remove the .test or .spec suffix and create fileName.temp.test.tsx format
-			const baseFileName = fileName.replace(/\.(test|spec)$/, '');
-			tempFileName = `${baseFileName}.temp.${testType}${fileExt}`;
-		} else {
-			// Fallback for files without test/spec pattern
-			tempFileName = `${fileName}.temp${fileExt}`;
-		}
-
-		console.log(
-			'Creating temp file path:',
-			path.resolve(path.join(folderDir, tempFileName)),
-		);
-
-		return path.resolve(path.join(folderDir, tempFileName));
-	}
-
-	/**
-	 * Writes content to a temporary file, creating it if it doesn't exist
-	 * @param originalFilePath The original file path
-	 * @param content The content to write
-	 * @param tempFilePath Optional custom temp file path (will create one if not provided)
-	 * @returns The path to the temp file
-	 */
-	async writeToTempFile(
-		originalFilePath: string,
-		content: string,
-		tempFilePath?: string,
-	): Promise<string> {
-		const tempPath = tempFilePath || this.createTempFilePath(originalFilePath);
-
-		try {
-			await this.writeFile(tempPath, content);
-			logger.info('artifacts', `Updated temp file at ${tempPath}`);
-			return tempPath;
-		} catch (error) {
-			logger.error(
-				'artifacts',
-				`Error writing to temp file ${tempPath}: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			);
-			throw error;
-		}
-	}
-
-	/**
-	 * Cleans up a temporary file
-	 */
-	async cleanupTempFile(tempPath: string): Promise<void> {
-		try {
-			if (fsSync.existsSync(tempPath)) {
-				await fs.unlink(tempPath);
-			}
-		} catch (error) {
-			logger.error(
-				'artifacts',
-				`Error cleaning up temporary file: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			);
-		}
-	}
-
-	/**
-	 * Finalizes a successful migration
-	 */
-	async finalizeMigration(
-		originalFilePath: string,
-		tempPath: string,
-		testDir: string,
-	): Promise<void> {
-		try {
-			// Read the content of the temporary file
-			const content = await fs.readFile(tempPath, 'utf8');
-
-			// Replace the original file with the content of the temporary file
-			await fs.writeFile(originalFilePath, content, 'utf8');
-
-			// Clean up the temporary file
-			await this.cleanupTempFile(tempPath);
-
-			// Log completion
-			logger.info(
-				'artifacts',
-				`Successfully migrated ${originalFilePath} (temp file: ${tempPath}, test dir: ${testDir})`,
-			);
-		} catch (error) {
-			logger.error(
-				'artifacts',
-				`Error finalizing migration: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			);
 		}
 	}
 
@@ -431,6 +280,81 @@ export class ArtifactFileSystem {
 				}`,
 			);
 			throw error;
+		}
+	}
+
+	/**
+	 * Saves a backup of the original file before replacing it
+	 */
+	async saveBackupFile(
+		testDir: string,
+		originalFilePath: string,
+		content: string,
+	): Promise<string> {
+		try {
+			const fileNameWithoutExt = path.basename(
+				originalFilePath,
+				path.extname(originalFilePath),
+			);
+			const fileExt = path.extname(originalFilePath);
+
+			const backupPath = path.join(
+				testDir,
+				`${fileNameWithoutExt}.original${fileExt}`,
+			);
+
+			await this.writeFile(backupPath, content);
+			logger.info(
+				'artifacts',
+				`Saved backup of original file to: ${backupPath}`,
+			);
+			return backupPath;
+		} catch (error) {
+			logger.error(
+				'artifacts',
+				`Error saving backup file: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Finalizes a migration by saving the result to the original file
+	 * For failed migrations, saves a copy to .unshallow directory
+	 */
+	async finalizeMigration(
+		originalFilePath: string,
+		rtlContent: string,
+		testDir: string,
+		status: 'success' | 'failed',
+	): Promise<void> {
+		try {
+			// Always update the original file
+			await fs.writeFile(originalFilePath, rtlContent, 'utf8');
+			logger.info('artifacts', `Updated original file: ${originalFilePath}`);
+
+			// For failed migrations, also save to .unshallow
+			if (status === 'failed') {
+				await this.saveAttemptFile(testDir, originalFilePath, rtlContent);
+				logger.info(
+					'artifacts',
+					`Migration failed, saved attempt in: ${testDir}`,
+				);
+			} else {
+				logger.success(
+					'artifacts',
+					`Migration successful for ${originalFilePath}`,
+				);
+			}
+		} catch (error) {
+			logger.error(
+				'artifacts',
+				`Error finalizing migration: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
 		}
 	}
 }
