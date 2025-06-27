@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Unshallow is a CLI tool for migrating Enzyme tests to React Testing Library. The project is currently undergoing a **major architectural refactoring** from a CLI-only tool to a modern web-enabled application with real-time monitoring capabilities.
 
 ### Current Status
+
 - ⚠️ **Breaking Migration in Progress**: Complete architectural overhaul
 - 🚫 **No Backward Compatibility**: This is a personal tool - feel free to make breaking changes
 - 🏗️ **New Architecture**: Moving to modular CLI, UI, Server separation
@@ -15,11 +16,13 @@ Unshallow is a CLI tool for migrating Enzyme tests to React Testing Library. The
 ## Architecture Overview
 
 ### Three-Module Structure
+
 1. **CLI Module**: Single command interface with configuration file reading
 2. **UI Module**: Empty (handled by external Vercel v0 project)
 3. **Server Module**: Core business logic, workflow, task management, and API
 
 ### Technology Stack
+
 - **Server Framework**: Hono.js (fast, lightweight, TypeScript-first)
 - **Queue System**: LevelDB + better-queue for persistent task management
 - **Workflow Engine**: LangGraph (existing workflow preserved and integrated)
@@ -28,6 +31,7 @@ Unshallow is a CLI tool for migrating Enzyme tests to React Testing Library. The
 - **Real-time Updates**: WebSocket communication with UI
 
 ### Key Technical Constraints
+
 - **Ephemeral State**: All workflow state in-memory only (except git worktrees/branches)
 - **Single File Updates**: Workflow can only modify the target file being migrated
 - **Patch-based Updates**: Use GPT-4.1 diff generation and patch application
@@ -36,6 +40,7 @@ Unshallow is a CLI tool for migrating Enzyme tests to React Testing Library. The
 ## Development Commands
 
 ### Core Commands
+
 ```bash
 # Install dependencies
 yarn install
@@ -65,7 +70,9 @@ yarn link:dev
 ```
 
 ### Testing and Validation
+
 Always run these before requesting approval:
+
 ```bash
 yarn build     # Ensure TypeScript compiles
 yarn lint      # Check code style
@@ -75,12 +82,14 @@ yarn test      # Run all tests
 ## Configuration Files
 
 ### Project Configuration
+
 - **UNSHALLOW.md**: Migration context, rules, and project-specific patterns (in target project)
 - **unshallow.env**: API keys, model tiers, command configurations (in target project)
 - **package.json**: Dependencies, scripts, and build configuration
 - **tsconfig.json**: TypeScript compiler settings
 
 ### Development Tools
+
 - **.eslintrc.cjs**: ESLint configuration for code quality
 - **.prettierrc**: Code formatting rules
 - **jest.config.js**: Test runner configuration
@@ -92,18 +101,21 @@ yarn test      # Run all tests
 Each feature implementation follows this structured approach:
 
 #### Phase 1: Code Implementation
+
 1. **Implement Feature**: Write the core functionality
 2. **Quality Checks**: Run `yarn build`, `yarn lint`, `yarn test`
 3. **Request Approval**: "Ask the developer to test and approve commit and push"
 4. **Autonomous Commit**: After approval, commit and push without additional approval
 
 #### Phase 2: Unit Testing
+
 1. **Write Tests**: Create comprehensive unit tests for the feature
 2. **Verify Coverage**: Ensure tests pass and cover edge cases
 3. **Request Approval**: "Ask the developer to test and approve commit and push"
 4. **Autonomous Commit**: After approval, commit and push without additional approval
 
 #### Phase 3: Documentation
+
 1. **Create Docs**: Write feature documentation with Mermaid diagrams
 2. **Update Architecture**: Modify high-level docs if needed
 3. **Organize**: Place docs in appropriate folder (e.g., `docs/server/api/`)
@@ -111,6 +123,7 @@ Each feature implementation follows this structured approach:
 5. **Autonomous Commit**: After approval, commit and push without additional approval
 
 ### Key Principles
+
 - **Atomic Commits**: Each phase gets its own focused commit
 - **Developer Approval**: Required for each phase before proceeding
 - **Autonomous Git**: Claude handles git operations after approval
@@ -118,7 +131,9 @@ Each feature implementation follows this structured approach:
 - **Clear Communication**: End every plan with approval request
 
 ### Approval Request Format
+
 Always end implementation plans with:
+
 ```
 - Ask the developer to test and approve commit and push
 - After approval by the dev will git add, commit and push, no need for approval for this git commits
@@ -127,6 +142,7 @@ Always end implementation plans with:
 ## Development Patterns
 
 ### File Structure Conventions
+
 ```
 src/
 ├── cli/                 # Command-line interface
@@ -145,6 +161,7 @@ src/
 ```
 
 ### Code Quality Standards
+
 - **TypeScript**: Strict type checking enabled
 - **ESLint**: Follow configured rules for consistency
 - **Prettier**: Automatic code formatting
@@ -152,6 +169,7 @@ src/
 - **Documentation**: Inline comments and external docs for complex logic
 
 ### Git Workflow
+
 - **Branch**: Work on `main` branch (personal project)
 - **Commits**: Atomic, descriptive commit messages
 - **Format**: Follow existing commit message patterns
@@ -160,19 +178,22 @@ src/
 ## Project-Specific Context
 
 ### Breaking Changes Approach
+
 - **No Migration Path**: Complete rewrite, no backward compatibility
 - **Personal Tool**: No external users to support during transition
 - **Clean Slate**: Feel free to restructure, rename, or remove existing code
 - **Modern Patterns**: Focus on clean architecture over legacy support
 
 ### Legacy Integration
+
 - **Preserve LangGraph**: Existing workflow in `obsolete/source/langgraph-workflow/`
 - **Reuse Logic**: Migration nodes and prompts can be adapted
 - **Modern Infrastructure**: Build new server layer around existing workflow
-- **Gradual Integration**: Start with new architecture, integrate workflow incrementally
 
 ### Model Configuration
+
 Configure different AI model tiers per workflow node:
+
 - **plan**: Planning and analysis steps
 - **migrate**: Core migration transformations
 - **fix**: Error resolution and fixes
@@ -184,18 +205,21 @@ Available tiers: `nano`, `mini` (default), `full`
 ## Common Development Tasks
 
 ### Adding New Server Routes
+
 1. Create route handler in `src/server/api/`
 2. Add route to main Hono app
 3. Write unit tests
 4. Document with API examples
 
 ### Implementing Workflow Nodes
+
 1. Create node in `src/server/workflow/`
 2. Integrate with existing LangGraph structure
 3. Add progress event emission
 4. Test with worker thread execution
 
 ### Git Worktree Operations
+
 1. Use `src/server/git-management/` abstractions
 2. Ensure proper cleanup on completion
 3. Handle branch association and commits
@@ -204,12 +228,14 @@ Available tiers: `nano`, `mini` (default), `full`
 ## Debugging and Troubleshooting
 
 ### Common Issues
+
 - **TypeScript Errors**: Check `tsconfig.json` and run `yarn build`
 - **Test Failures**: Verify jest configuration and dependencies
 - **Linting Issues**: Run `yarn lint:fix` for auto-fixes
 - **Git Operations**: Check worktree state and branch permissions
 
 ### Development Tools
+
 - **VS Code**: Recommended with TypeScript and ESLint extensions
 - **Node.js**: Version specified in `package.json` engines
 - **Yarn**: Preferred package manager (version in `packageManager`)
