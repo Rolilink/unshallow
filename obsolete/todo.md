@@ -1,0 +1,33 @@
+# Todo to become "production ready"
+
+- Cleanup and refactor to accept files instead of tested component
+  - Refactor EnrichedContext to accept files
+  - Refactor migrate to accept a test file
+  - Pass the original test file through the nodes
+  - Refactor prompts to support tests that use components
+  - ignore paths that are not relative (dependencies and aliases)
+  - remove the .ts extension only support .tsx
+	- always use absolute paths
+- Optimization
+  - Remove the reasoning flags instead use the configuration file
+  - Implement the ability to configure each node model
+  - refactor the strutured api call to use the configuration file or default to gpt-4.1-mini
+  - Optimize the prompts for caching
+  - Refactor to generate and apply file diffs instead of full files
+- typescript check and fix fixes
+  - support two modes: single file and project (to support nx)
+- observability and debugging
+  - fix parallel migration langfuse tracing
+  - support caching lookup on langfuse
+- .unshallow folder fixes
+  - instead of supporting .temp.spec.tsx file we should replace the original file, in case it fails we should revert the changes and store the last state of the file in the unshallow folder.
+- context.md and configuration
+  - support example files in the flag system
+  - support context.md through the flag system instead of saving it in the user home directory
+  - support configuration through the flag system and an .env file instead of the configuration file in the user home directory
+- UI
+  - support a UI to view the migration process for (parallel migration)
+  - support a UI to view the migration process for (single file)
+  - support a UI to view the result of a single file migration
+  - support a UI to view the result of the parallel migration
+  - support a report of the migration process using html (optional)
