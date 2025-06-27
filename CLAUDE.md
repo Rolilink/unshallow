@@ -76,6 +76,7 @@ Always run these before requesting approval:
 ```bash
 yarn build     # Ensure TypeScript compiles
 yarn lint      # Check code style
+yarn format    # Format all files (TS, MD, etc.)
 yarn test      # Run all tests
 ```
 
@@ -103,14 +104,14 @@ Each feature implementation follows this structured approach:
 #### Phase 1: Code Implementation
 
 1. **Implement Feature**: Write the core functionality
-2. **Quality Checks**: Run `yarn build`, `yarn lint`, `yarn test`
+2. **Quality Checks**: Run `yarn build`, `yarn lint`, `yarn format`, `yarn test`
 3. **Request Approval**: "Ask the developer to test and approve commit and push"
 4. **Autonomous Commit**: After approval, commit and push without additional approval
 
 #### Phase 2: Unit Testing
 
 1. **Write Tests**: Create comprehensive unit tests for the feature
-2. **Verify Coverage**: Ensure tests pass and cover edge cases
+2. **Quality Checks**: Run `yarn build`, `yarn lint`, `yarn format`, `yarn test`
 3. **Request Approval**: "Ask the developer to test and approve commit and push"
 4. **Autonomous Commit**: After approval, commit and push without additional approval
 
@@ -119,15 +120,16 @@ Each feature implementation follows this structured approach:
 1. **Create Docs**: Write feature documentation with Mermaid diagrams
 2. **Update Architecture**: Modify high-level docs if needed
 3. **Organize**: Place docs in appropriate folder (e.g., `docs/server/api/`)
-4. **Request Approval**: "Ask the developer to test and approve commit and push"
-5. **Autonomous Commit**: After approval, commit and push without additional approval
+4. **Quality Checks**: Run `yarn format` to ensure consistent formatting
+5. **Request Approval**: "Ask the developer to test and approve commit and push"
+6. **Autonomous Commit**: After approval, commit and push without additional approval
 
 ### Key Principles
 
 - **Atomic Commits**: Each phase gets its own focused commit
 - **Developer Approval**: Required for each phase before proceeding
 - **Autonomous Git**: Claude handles git operations after approval
-- **Quality First**: Always run checks before requesting approval
+- **Quality First**: Always run checks and formatting before requesting approval
 - **Clear Communication**: End every plan with approval request
 
 ### Approval Request Format
