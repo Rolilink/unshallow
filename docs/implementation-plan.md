@@ -42,8 +42,13 @@
 ### 1.6 Workflow Migration
 
 - Port existing LangGraph workflow from `obsolete/` to new `src/server/workflow/`
-- Adapt workflow nodes to new modular architecture
-- Maintain existing migration logic while modernizing interfaces
+- **Refactor workflow nodes to use ReAct agents**:
+  - **Planning Agent**: ReAct agent for creating migration plans
+  - **Migration Agent**: ReAct agent for executing migrations and fixes
+  - **Lint Fix Agent**: ReAct agent for resolving linting issues
+  - **TypeScript Fix Agent**: ReAct agent for resolving type errors
+- Each agent will have access to tools for their specific domain
+- Maintain existing migration logic while modernizing to agent-based approach
 - Create workflow orchestrator for single-file execution
 
 ### 1.7 Simple Test CLI

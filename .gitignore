@@ -6,4 +6,4 @@ dist
 .env
 
 
-.DS_Store
+.DS_Storesrc/example-usage.ts

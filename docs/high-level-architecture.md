@@ -7,7 +7,7 @@ The architecture is built around three main modules with clear separation of con
 ### 1. CLI Module
 
 - Single command interface: `unshallow migrate [folder]`
-- Configuration file reading (`UNSHALLOW.md`, `unshallow.env`)
+- Configuration file reading (`UNSHALLOW.md`, `unshallow.json`)
 - Server lifecycle management (start/stop)
 - Minimal, focused responsibility
 
@@ -107,12 +107,13 @@ src/server/
 - Project-specific patterns and conventions
 - Business logic guidance for migrations
 
-### unshallow.env
+### unshallow.json
 
 - OpenAI API keys
-- Model tier selections per workflow node (plan, migrate, fix, lint-fix, ts-fix)
+- Model tier selections per workflow node (plan, migrate, lint-fix, ts-fix)
 - Command configurations (lint, test, typecheck)
 - Environment-specific technical settings
+- JSON format for structured configuration
 
 ## Core Workflows
 

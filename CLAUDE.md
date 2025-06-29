@@ -85,7 +85,7 @@ yarn test      # Run all tests
 ### Project Configuration
 
 - **UNSHALLOW.md**: Migration context, rules, and project-specific patterns (in target project)
-- **unshallow.env**: API keys, model tiers, command configurations (in target project)
+- **unshallow.json**: API keys, model tiers, command configurations (in target project)
 - **package.json**: Dependencies, scripts, and build configuration
 - **tsconfig.json**: TypeScript compiler settings
 
@@ -194,13 +194,12 @@ src/
 
 ### Model Configuration
 
-Configure different AI model tiers per workflow node:
+Configure different AI model tiers per workflow node (all using ReAct agents):
 
-- **plan**: Planning and analysis steps
-- **migrate**: Core migration transformations
-- **fix**: Error resolution and fixes
-- **lint-fix**: Linting error corrections
-- **ts-fix**: TypeScript error corrections
+- **plan**: Planning and analysis ReAct agent
+- **migrate**: Migration and fixes ReAct agent
+- **lint-fix**: Linting error corrections ReAct agent
+- **ts-fix**: TypeScript error corrections ReAct agent
 
 Available tiers: `nano`, `mini` (default), `full`
 
