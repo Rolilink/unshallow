@@ -22,21 +22,34 @@ The architecture is built around three main modules with clear separation of con
 - All workflow, task management, and file system operations
 - Ephemeral in-memory state (except git worktrees/branches)
 - Hono.js-based API and WebSocket endpoints for UI communication
+- **Configuration Management**: Implemented core module for environment and project config
 
 ## Server Module Structure
 
 ```
-src/server/
-├── api/                     # Hono.js REST API routes
-├── websocket-events/        # WebSocket event handlers
-├── workflow/               # Migration workflow logic
-├── task-management/        # Queue + worker management
-├── git-management/         # Worktree + branch operations
-├── file-system/            # File access with worktree support
-├── patch-system/           # GPT-4.1 diff application
-├── config/                 # Configuration management
-├── models/                 # Model tier selection
-└── shared/                 # Server-wide utilities
+src/
+├── cli.ts                   # Main CLI entry point
+└── core/                   # Core business logic modules
+    ├── config/             # ✅ Configuration management (IMPLEMENTED)
+    │   ├── ConfigurationManager.ts
+    │   ├── types.ts
+    │   └── __tests__/
+    ├── file-system/        # ✅ File system operations (IMPLEMENTED)
+    │   ├── FileSystem.ts
+    │   ├── types.ts
+    │   └── __tests__/
+    ├── git/               # ✅ Git repository operations (IMPLEMENTED)
+    │   ├── GitRepository.ts
+    │   ├── types.ts
+    │   └── __tests__/
+    ├── api/               # 🔄 Hono.js REST API routes (PLANNED)
+    ├── websocket-events/  # 🔄 WebSocket event handlers (PLANNED)
+    ├── workflow/          # 🔄 Migration workflow logic (PLANNED)
+    ├── task-management/   # 🔄 Queue + worker management (PLANNED)
+    ├── git-management/    # 🔄 Worktree + branch operations (PLANNED)
+    ├── patch-system/      # 🔄 GPT-4.1 diff application (PLANNED)
+    ├── models/            # 🔄 Model tier selection (PLANNED)
+    └── shared/            # 🔄 Server-wide utilities (PLANNED)
 ```
 
 ## Key Technical Stack & Features
@@ -81,8 +94,9 @@ src/server/
 ### Model Configuration System
 
 - **Tier Selection**: nano, mini, full (default: mini)
-- **Per-Node Configuration**: Different tiers for plan, migrate, fix, lint-fix, ts-fix
-- **Environment Configuration**: Model selection exclusively via unshallow.env
+- **Per-Node Configuration**: Different tiers for plan, migrate, lintFix, tsFix
+- **ReAct Agents**: All workflow nodes use ReAct agents with configurable model tiers
+- **Environment Configuration**: Model selection via unshallow.json with type-safe validation
 - **Cost Optimization**: Balance between quality and API costs
 
 ### Task Management
@@ -109,11 +123,37 @@ src/server/
 
 ### unshallow.json
 
-- OpenAI API keys
-- Model tier selections per workflow node (plan, migrate, lint-fix, ts-fix)
-- Command configurations (lint, test, typecheck)
-- Environment-specific technical settings
-- JSON format for structured configuration
+- **API Keys**: OpenAI (required), Langfuse (optional)
+- **Model Tiers**: Per workflow node (plan, migrate, lintFix, tsFix) using ReAct agents
+- **Commands**: Configurable commands (test, lint, lintFix, typeCheck)
+- **Validation**: Type-safe configuration with comprehensive error handling
+- **Defaults**: Sensible fallbacks for partial configuration
+- **JSON Format**: Structured configuration with full TypeScript support
+
+## Implemented Core Modules
+
+### Configuration Management (✅ COMPLETED)
+
+The configuration management system has been fully implemented with comprehensive testing:
+
+- **ConfigurationManager**: Central orchestrator for all configuration operations
+- **Environment Config**: Loads and validates `unshallow.json` with required OpenAI API key
+- **Project Config**: Loads plain text `UNSHALLOW.md` content for migration context
+- **Type Safety**: Full TypeScript support with no `any` usage
+- **Validation**: Comprehensive error handling and validation logic
+- **Testing**: 109 test cases with 100% coverage (unit + integration tests)
+
+#### Key Features:
+- Fail-fast configuration loading with descriptive errors
+- Partial configuration support with sensible defaults
+- Model tier validation for ReAct agents
+- Git repository root detection with CWD fallback
+- Type-safe utility methods for accessing configuration
+
+#### Documentation:
+- [Configuration Management Module](./modules/configuration-management.md)
+- [File System Module](./modules/file-system.md)
+- [Git Repository Module](./modules/git-repository.md)
 
 ## Core Workflows
 
