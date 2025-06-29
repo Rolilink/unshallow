@@ -1,9 +1,15 @@
 node_modules
 dist
+coverage
+
 # LangGraph API
 .langgraph_api
 
+# Environment files
 .env
 
+# macOS
+.DS_Store
 
-.DS_Storesrc/example-usage.ts
+# Example usage file
+src/example-usage.ts
