@@ -11,35 +11,7 @@
 - Implement runtime configuration validation
 - Create configuration loading utilities
 
-### 1.2 Logging Infrastructure
-
-- Create structured logging system for migration tracking (`src/server/shared/logging/`)
-- Add progress tracking and error reporting
-- Implement log aggregation for debugging
-- Build logging interfaces for workflow integration
-
-### 1.3 File System Module
-
-- Build file access layer with worktree support (`src/server/file-system/`)
-- Implement dual access patterns (main repo + worktree)
-- Add path resolution for transparent file operations
-- Create test file discovery functionality
-
-### 1.4 Git Management Module
-
-- Implement git worktree operations (`src/server/git-management/`)
-- Add worktree creation, branch association, and cleanup
-- Build commit/push logic for successful migrations
-- Handle isolation between concurrent tasks
-
-### 1.5 Patch System
-
-- Migrate existing patch application tool to new architecture (`src/server/patch-system/`)
-- Integrate with GPT-4.1 diff generation
-- Ensure single-file modification constraints
-- Add diff validation and integrity checks
-
-### 1.6 Workflow Migration
+### 1.2 Workflow Migration
 
 - Port existing LangGraph workflow from `obsolete/` to new `src/server/workflow/`
 - **Refactor workflow nodes to use ReAct agents**:
@@ -50,6 +22,34 @@
 - Each agent will have access to tools for their specific domain
 - Maintain existing migration logic while modernizing to agent-based approach
 - Create workflow orchestrator for single-file execution
+
+### 1.3 File System Module
+
+- Update file access layer if needed for workflow integration (`src/server/file-system/`)
+- Minimal changes since worktree support not needed in this phase
+- Add path resolution for basic file operations
+- Create test file discovery functionality
+
+### 1.4 Git Management Module
+
+- Update git operations if needed for workflow integration (`src/server/git-management/`)
+- Minimal changes since worktree operations not needed in this phase
+- Basic git repository operations
+- Foundation for future worktree support
+
+### 1.5 Patch System
+
+- Migrate existing patch application tool to new architecture (`src/server/patch-system/`)
+- Integrate with GPT-4.1 diff generation
+- Ensure single-file modification constraints
+- Add diff validation and integrity checks
+
+### 1.6 Logging Infrastructure
+
+- Create structured logging system for migration tracking (`src/server/shared/logging/`)
+- Add progress tracking and error reporting
+- Implement log aggregation for debugging
+- Build logging interfaces for workflow integration
 
 ### 1.7 Simple Test CLI
 

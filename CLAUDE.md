@@ -37,6 +37,19 @@ Unshallow is a CLI tool for migrating Enzyme tests to React Testing Library. The
 - **Patch-based Updates**: Use GPT-4.1 diff generation and patch application
 - **Worker Thread Processing**: Parallel migration execution
 
+## Implementation Approach
+
+**Follow the structured implementation plan**: See `docs/architecture/implementation-plan.md` for the complete phase-by-phase development approach. This document defines the exact order of subsystem implementation and dependencies.
+
+**Current Phase**: Phase 1 - Core Migration Infrastructure
+- ✅ **1.1 Configuration Management** - Complete
+- 🔄 **1.2 Workflow Migration** - Next task
+- ⏳ **1.3 File System Module** - Minor updates if needed
+- ⏳ **1.4 Git Management Module** - Minor updates if needed
+- ⏳ **1.5 Patch System** - Planned
+- ⏳ **1.6 Logging Infrastructure** - Planned
+- ⏳ **1.7 Simple Test CLI** - Planned
+
 ## Development Commands
 
 ### Core Commands
