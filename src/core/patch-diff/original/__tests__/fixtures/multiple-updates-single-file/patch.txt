@@ -1,0 +1,10 @@
+*** Begin Patch
+*** Update File: multi.py
+@@ def hello():
+-    print("hello")
++    print("Hello, World!")
+
+@@ def goodbye():
+-    print("goodbye")
++    print("Farewell!")
+*** End Patch

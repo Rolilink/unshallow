@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: whitespace.py
+@@ def calculate_result(x, y):
+     """Calculate result with trailing whitespace and inconsistent indentation."""
+     
++    # Added validation
++    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
++        raise ValueError("Both x and y must be numbers")
+     
+     if x > 0:
+         result = x + y
+*** End Patch

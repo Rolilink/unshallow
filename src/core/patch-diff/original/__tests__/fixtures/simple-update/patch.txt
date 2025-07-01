@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: hello.py
+@@ def greet(name):
+     """Greet someone by name"""
+-    print(f"Hello {name}")
++    print(f"Hello, {name}!")
++    print(f"Nice to meet you!")
+
+@@ def main():
+-    greet("World")
++    greet("Python Developer")
+*** End Patch

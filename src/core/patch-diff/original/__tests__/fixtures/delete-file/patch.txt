@@ -1,0 +1,4 @@
+*** Begin Patch
+*** Delete File: delete_me.py
+*** Delete File: old_module.py
+*** End Patch

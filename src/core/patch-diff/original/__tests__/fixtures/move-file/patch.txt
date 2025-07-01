@@ -1,0 +1,19 @@
+*** Begin Patch
+*** Update File: old_location.py
+*** Move to: src/new_location.py
+-class OldLocationProcessor:
+-    """A processor that handles old location tasks."""
++class NewLocationProcessor:
++    """A processor that handles new location tasks."""
+     
+     def __init__(self, config=None):
+         self.config = config or {}
+         self.status = "initialized"
+
+@@ def process_data(self, data):
+-        """Process data using old location logic."""
++        """Process data using new location logic."""
+         processed = []
+         for item in data:
+             if self.validate_item(item):
+*** End Patch

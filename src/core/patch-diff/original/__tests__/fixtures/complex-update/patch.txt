@@ -1,0 +1,37 @@
+*** Begin Patch
+*** Update File: complex.py
+@@ import os
+ import sys
++import json
++import logging
+ from typing import List, Dict
+ from pathlib import Path
+
+@@ def load_config(self) -> Dict:
+         """Load configuration from file."""
+         if not os.path.exists(self.config_path):
++            logging.error(f"Config file not found: {self.config_path}")
+             raise FileNotFoundError(f"Config file not found: {self.config_path}")
+         
+         with open(self.config_path, 'r') as f:
+-            return eval(f.read())  # Simple eval for demo
++            # Use json.load instead of eval for security
++            return json.load(f)
+
+@@ def get_stats(self) -> Dict:
+         """Get processing statistics."""
+         return {
+             'processed_count': self.processed_count,
+             'config_path': self.config_path
+         }
++
++    def reset_stats(self) -> None:
++        """Reset processing statistics."""
++        self.processed_count = 0
++        self.data.clear()
++        logging.info("Statistics reset")
++    
++    def validate_data(self, items: List[str]) -> bool:
++        """Validate input data before processing."""
++        return all(isinstance(item, str) for item in items)
+*** End Patch

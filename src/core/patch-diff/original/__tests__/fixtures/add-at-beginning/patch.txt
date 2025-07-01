@@ -1,0 +1,6 @@
+*** Begin Patch
+*** Update File: start.py
++# Added at the beginning
+ def main():
+     print("original")
+*** End Patch
