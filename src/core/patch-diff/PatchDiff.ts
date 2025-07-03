@@ -6,7 +6,7 @@
  * a cohesive interface with comprehensive error handling and result reporting.
  */
 
-import { IPatchFileSystem } from '../file-system/types';
+import { IFileSystem, RootedFileSystem } from '../file-system';
 import {
   PatchOptions,
   PatchResult,
@@ -28,17 +28,25 @@ import { ChunkApplicator } from './ChunkApplicator';
 /**
  * Main PatchDiff class for applying context-based patches with security controls.
  * Uses composition to combine all specialized components into a unified interface.
+ * 
+ * All file operations are constrained to the specified root directory for security
+ * and isolation. This supports testing scenarios and future git worktree integration.
  */
 export class PatchDiff {
   private readonly parser: PatchParser;
   private readonly validator: SecurityValidator;
   private readonly contextFinder: ContextFinder;
   private readonly applicator: ChunkApplicator;
+  private readonly rootedFileSystem: RootedFileSystem;
 
   constructor(
-    private readonly fileSystem: IPatchFileSystem,
+    baseFileSystem: IFileSystem,
+    rootPath: string,
     private readonly options: PatchOptions = DEFAULT_PATCH_OPTIONS
   ) {
+    // Create a rooted filesystem to constrain all operations to the specified root
+    this.rootedFileSystem = new RootedFileSystem(baseFileSystem, rootPath);
+    
     // Initialize all components with the same options
     this.parser = new PatchParser(options);
     this.validator = new SecurityValidator(options);
@@ -254,11 +262,11 @@ export class PatchDiff {
 
     for (const filePath of filePaths) {
       try {
-        const content = await this.fileSystem.read(filePath);
+        const content = await this.rootedFileSystem.read(filePath);
         files.set(filePath, content);
       } catch (error) {
         // Check if this is expected (file might not exist for ADD operations)
-        if (await this.fileSystem.exists(filePath)) {
+        if (await this.rootedFileSystem.exists(filePath)) {
           errors.push(`Failed to read ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
         // For non-existent files, we'll let the parser handle the validation
@@ -289,15 +297,15 @@ export class PatchDiff {
             if (change.newContent === undefined) {
               throw new Error('ADD change missing new content');
             }
-            await this.fileSystem.write(filePath, change.newContent);
+            await this.rootedFileSystem.write(filePath, change.newContent);
             break;
 
           case ActionType.DELETE:
             if (change.movePath) {
               // This is a move operation, file already written to new location
-              await this.fileSystem.delete(filePath);
+              await this.rootedFileSystem.delete(filePath);
             } else {
-              await this.fileSystem.delete(filePath);
+              await this.rootedFileSystem.delete(filePath);
             }
             break;
 
@@ -308,11 +316,11 @@ export class PatchDiff {
             
             if (change.movePath) {
               // Move operation: write to new location and delete old
-              await this.fileSystem.write(change.movePath, change.newContent);
-              await this.fileSystem.delete(filePath);
+              await this.rootedFileSystem.write(change.movePath, change.newContent);
+              await this.rootedFileSystem.delete(filePath);
             } else {
               // Regular update
-              await this.fileSystem.write(filePath, change.newContent);
+              await this.rootedFileSystem.write(filePath, change.newContent);
             }
             break;
 
@@ -450,6 +458,13 @@ export class PatchDiff {
   }
 
   /**
+   * Get the root directory for patch operations
+   */
+  getRoot(): string {
+    return this.rootedFileSystem.getRoot();
+  }
+
+  /**
    * Get component status and health information
    */
   async getStatus(): Promise<{
@@ -474,7 +489,7 @@ export class PatchDiff {
     // Test file system availability
     let fileSystemStatus: { available: boolean; error?: string };
     try {
-      await this.fileSystem.exists(''); // Test basic operation
+      await this.rootedFileSystem.exists(''); // Test basic operation
       fileSystemStatus = { available: true };
     } catch (error) {
       fileSystemStatus = { 

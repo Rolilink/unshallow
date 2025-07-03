@@ -66,7 +66,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
    * Copy fixture template files to temp directory
    */
   async function setupTestCase(fixtureName: string): Promise<void> {
-    const fixtureDir = path.join(__dirname, 'fixtures', fixtureName);
+    const fixtureDir = path.join(__dirname, '../../__tests__/fixtures', fixtureName);
     const templateDir = path.join(fixtureDir, 'template');
     
     try {
@@ -101,7 +101,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
    * Compare actual files with expected files
    */
   async function assertFilesMatch(fixtureName: string): Promise<void> {
-    const expectedDir = path.join(__dirname, 'fixtures', fixtureName, 'expected');
+    const expectedDir = path.join(__dirname, '../../__tests__/fixtures', fixtureName, 'expected');
     
     // Get all files in expected directory
     const expectedFiles = await getAllFiles(expectedDir);
@@ -155,7 +155,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should update a single file with basic changes', async () => {
       await setupTestCase('simple-update');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'simple-update', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'simple-update', 'patch.txt'), 
         'utf-8'
       );
       
@@ -170,7 +170,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should apply multiple changes to one file', async () => {
       await setupTestCase('multiple-updates-single-file');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'multiple-updates-single-file', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'multiple-updates-single-file', 'patch.txt'), 
         'utf-8'
       );
       
@@ -186,7 +186,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should create new files', async () => {
       await setupTestCase('add-file');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'add-file', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'add-file', 'patch.txt'), 
         'utf-8'
       );
       
@@ -223,7 +223,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should delete existing files', async () => {
       await setupTestCase('delete-file');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'delete-file', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'delete-file', 'patch.txt'), 
         'utf-8'
       );
       
@@ -238,7 +238,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should move file to new location with content update', async () => {
       await setupTestCase('move-file');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'move-file', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'move-file', 'patch.txt'), 
         'utf-8'
       );
       
@@ -253,7 +253,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should handle multiple chunks in the same file', async () => {
       await setupTestCase('complex-update');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'complex-update', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'complex-update', 'patch.txt'), 
         'utf-8'
       );
       
@@ -268,7 +268,7 @@ describe('[integration]: patch_diff.py Integration Tests', () => {
     it('should handle adding lines at the beginning of a file', async () => {
       await setupTestCase('add-at-beginning');
       const patch = await fs.readFile(
-        path.join(__dirname, 'fixtures', 'add-at-beginning', 'patch.txt'), 
+        path.join(__dirname, '../../__tests__/fixtures', 'add-at-beginning', 'patch.txt'), 
         'utf-8'
       );
       
