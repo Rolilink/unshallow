@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
-import { IPatchFileSystem } from './types';
+import { IFileSystem } from '../types';
 
-export class FileSystem implements IPatchFileSystem {
+export class FileSystem implements IFileSystem {
   async read(path: string): Promise<string> {
     return await fs.readFile(path, 'utf-8');
   }
