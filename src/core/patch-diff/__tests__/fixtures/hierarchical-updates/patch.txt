@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: models.py
+@@ class User:
+    def update(self):
+-        print("Old User update")
++        print("Updated user logic!")
+
+@@ class Product:
+    def update(self):
+-        print("Old Product update")
++        print("Updated product logic!")
+*** End Patch

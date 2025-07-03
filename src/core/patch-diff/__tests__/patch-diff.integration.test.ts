@@ -22,7 +22,10 @@ describe('[integration]: PatchDiff End-to-End Tests', () => {
   });
 
   // Helper function to copy directory recursively
-  async function copyDirectory(source: string, destination: string): Promise<void> {
+  async function copyDirectory(
+    source: string,
+    destination: string
+  ): Promise<void> {
     await fs.mkdir(destination, { recursive: true });
     const entries = await fs.readdir(source, { withFileTypes: true });
 
@@ -39,13 +42,18 @@ describe('[integration]: PatchDiff End-to-End Tests', () => {
   }
 
   // Helper function to compare directories
-  async function compareDirectories(actualDir: string, expectedDir: string): Promise<boolean> {
+  async function compareDirectories(
+    actualDir: string,
+    expectedDir: string
+  ): Promise<boolean> {
     const actualFiles = await getAllFiles(actualDir);
     const expectedFiles = await getAllFiles(expectedDir);
 
     // Check if same number of files
     if (actualFiles.length !== expectedFiles.length) {
-      console.error(`File count mismatch: actual=${actualFiles.length}, expected=${expectedFiles.length}`);
+      console.error(
+        `File count mismatch: actual=${actualFiles.length}, expected=${expectedFiles.length}`
+      );
       console.error('Actual files:', actualFiles);
       console.error('Expected files:', expectedFiles);
       return false;
@@ -76,7 +84,10 @@ describe('[integration]: PatchDiff End-to-End Tests', () => {
   }
 
   // Helper to get all files in a directory recursively
-  async function getAllFiles(dir: string, base: string = ''): Promise<string[]> {
+  async function getAllFiles(
+    dir: string,
+    base: string = ''
+  ): Promise<string[]> {
     const files: string[] = [];
     const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -85,7 +96,7 @@ describe('[integration]: PatchDiff End-to-End Tests', () => {
       const relPath = path.join(base, entry.name);
 
       if (entry.isDirectory()) {
-        files.push(...await getAllFiles(fullPath, relPath));
+        files.push(...(await getAllFiles(fullPath, relPath)));
       } else {
         files.push(relPath);
       }
@@ -119,7 +130,9 @@ describe('[integration]: PatchDiff End-to-End Tests', () => {
 
     // Check if patch application was successful
     if (!result.success) {
-      throw new Error(`Patch application failed: ${result.error?.message || 'Unknown error'}`);
+      throw new Error(
+        `Patch application failed: ${result.error?.message || 'Unknown error'}`
+      );
     }
 
     // Compare results with expected
@@ -160,5 +173,9 @@ describe('[integration]: PatchDiff End-to-End Tests', () => {
 
   it('should apply delete-file patch correctly (multi-file)', async () => {
     await runFixtureTest('delete-file');
+  });
+
+  it('should apply hierarchical-updates patch correctly', async () => {
+    await runFixtureTest('hierarchical-updates');
   });
 });
