@@ -186,7 +186,7 @@ export class PatchDiff {
         await this.fileSystem.delete(fullPath);
         break;
 
-      case ActionType.ADD:
+      case ActionType.ADD: {
         // Ensure parent directory exists (from write_file function line 732-735)
         const parentDir = this.securityValidator.getParentDirectory(relativePath);
         if (parentDir) {
@@ -195,8 +195,9 @@ export class PatchDiff {
         }
         await this.fileSystem.write(fullPath, change.new_content || '');
         break;
+      }
 
-      case ActionType.UPDATE:
+      case ActionType.UPDATE: {
         if (change.move_path) {
           // Move operation: write to new location, delete old
           const newFullPath = this.securityValidator.resolvePath(this.rootPath, change.move_path);
@@ -215,6 +216,7 @@ export class PatchDiff {
           await this.fileSystem.write(fullPath, change.new_content || '');
         }
         break;
+      }
     }
   }
 }

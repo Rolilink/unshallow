@@ -711,7 +711,7 @@ export function process_patch(
   }
   const paths = identify_files_needed(text);
   const orig = load_files(paths, openFn);
-  const [patch, _fuzz] = text_to_patch(text, orig);
+  const [patch] = text_to_patch(text, orig);
   const commit = patch_to_commit(patch, orig);
   apply_commit(commit, writeFn, removeFn);
   return 'Done!';

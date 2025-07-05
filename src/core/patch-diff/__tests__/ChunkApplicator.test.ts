@@ -434,8 +434,8 @@ describe('ChunkApplicator', () => {
     });
 
     it('should skip unchanged files with undefined values', () => {
-      const orig = { 'file.py': undefined as any };
-      const updated = { 'file.py': undefined as any };
+      const orig: Record<string, string | null> = { 'file.py': undefined as unknown as string };
+      const updated: Record<string, string | null> = { 'file.py': undefined as unknown as string };
 
       const commit = chunkApplicator.assembleChanges(orig, updated);
       
