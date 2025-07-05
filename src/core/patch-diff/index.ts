@@ -1,32 +1,39 @@
-/**
- * Patch-diff module exports.
- * 
- * This module provides a context-based patching system for applying
- * AI-generated code modifications.
- */
-
-// Export all types and interfaces
-export * from './types';
-
-// Export main class and components
+// Main exports for the patch-diff system
 export { PatchDiff } from './PatchDiff';
-export { PatchParser } from './PatchParser';
-export { SecurityValidator, ValidationResult, PermissionDeniedError, FileAccessDeniedError } from './SecurityValidator';
-export { ContextFinder, ContextMatch } from './ContextFinder';
-export { ChunkApplicator } from './ChunkApplicator';
 
-// Re-export commonly used items for convenience
+// Types and interfaces
+export type {
+  PatchResult,
+  ValidationResult,
+  PreviewResult,
+  FileChange,
+  Chunk,
+  PatchAction,
+  Patch,
+  Commit,
+} from './types';
+
 export {
   ActionType,
-  PatchErrorCode,
-  PatchError,
-  InvalidPatchFormatError,
-  FileNotFoundError,
-  FileAlreadyExistsError,
+  DiffError,
   ContextNotFoundError,
-  FileSystemError,
-  DEFAULT_PATCH_OPTIONS,
-  DEFAULT_FUZZY_MATCHING,
-  DEFAULT_PERMISSIONS,
-  DEFAULT_FILE_ACCESS
+  AmbiguousContextError,
+  FileNotFoundError,
+  FileExistsError,
+  InvalidPatchError,
+  SecurityError,
 } from './types';
+
+// Utility functions
+export {
+  textToPatch,
+  identifyFilesNeeded,
+  identifyFilesAdded,
+  identifyFilesDeleted,
+  identifyFilesUpdated,
+} from './PatchParser';
+
+// Core components (for advanced usage)
+export { ContextFinder } from './ContextFinder';
+export { ChunkApplicator } from './ChunkApplicator';
+export { SecurityValidator } from './SecurityValidator';

@@ -1,646 +1,489 @@
-/**
- * PatchParser component for parsing context-based patch text.
- * 
- * Ports the Python patch_diff.py parser logic to TypeScript with proper error handling
- * and composition-based architecture. Handles all three operation types: ADD, DELETE, UPDATE.
- */
-
 import {
-  ActionType,
+  Patch,
   PatchAction,
-  ParsedPatch,
-  PatchOptions,
-  PatchError,
-  InvalidPatchFormatError,
-  FileNotFoundError,
-  FileAlreadyExistsError,
-  PatchErrorCode
+  ActionType,
+  DiffError,
+  PATCH_PREFIX,
+  PATCH_SUFFIX,
+  ADD_FILE_PREFIX,
+  DELETE_FILE_PREFIX,
+  UPDATE_FILE_PREFIX,
+  MOVE_FILE_TO_PREFIX,
+  END_OF_FILE_PREFIX,
+  HUNK_ADD_LINE_PREFIX,
 } from './types';
 
-/**
- * Internal chunk data structure used during parsing
- */
-interface ParsingChunk {
-  origIndex: number;
-  delLines: string[];
-  insLines: string[];
-}
-
+import { ContextFinder } from './ContextFinder';
 
 /**
- * Parser state for tracking current parsing position and context
+ * Parser class that converts V4A patch text into structured Patch objects.
+ * This is a direct adaptation of the Parser class from the original implementation.
  */
-class ParserState {
-  constructor(
-    public readonly lines: string[],
-    public index: number = 0,
-    public fuzz: number = 0
-  ) {}
+export class PatchParser {
+  private currentFiles: Record<string, string>;
+  private lines: string[];
+  public index = 0;
+  private patch: Patch = { actions: {} };
+  private fuzz = 0;
+  private contextFinder: ContextFinder;
 
-  /**
-   * Get current line, throws if at end
-   */
-  getCurrentLine(): string {
-    if (this.index >= this.lines.length) {
-      throw new InvalidPatchFormatError(
-        'Unexpected end of input while parsing patch',
-        { index: this.index, totalLines: this.lines.length },
-        this.index
-      );
-    }
-    return this.lines[this.index] || '';
+  constructor(currentFiles: Record<string, string>, lines: string[]) {
+    this.currentFiles = currentFiles;
+    this.lines = lines;
+    this.contextFinder = new ContextFinder();
   }
 
   /**
-   * Check if parsing is complete
+   * Check if parsing is done based on current index and optional prefixes
    */
-  isDone(prefixes?: string[]): boolean {
+  private isDone(prefixes?: string[]): boolean {
     if (this.index >= this.lines.length) {
       return true;
     }
-    
-    if (prefixes && prefixes.length > 0) {
-      const currentLine = this.normalizeLineEnding(this.getCurrentLine());
-      return prefixes.some(prefix => currentLine.startsWith(prefix));
+    if (
+      prefixes &&
+      prefixes.some((p) => this.lines[this.index]!.startsWith(p.trim()))
+    ) {
+      return true;
     }
-    
     return false;
   }
 
   /**
-   * Check if current line starts with given prefix
+   * Check if current line starts with given prefix(es)
    */
-  startsWith(prefix: string | string[]): boolean {
+  private startsWith(prefix: string | string[]): boolean {
     const prefixes = Array.isArray(prefix) ? prefix : [prefix];
-    const currentLine = this.normalizeLineEnding(this.getCurrentLine());
-    return prefixes.some(p => currentLine.startsWith(p));
+    return prefixes.some((p) => this.lines[this.index]!.startsWith(p));
   }
 
   /**
-   * Read line if it starts with prefix, advance index, return text after prefix
+   * Read a string from current line, optionally checking for prefix
    */
-  readWithPrefix(prefix: string): string {
-    if (prefix === '') {
-      throw new Error('readWithPrefix() requires a non-empty prefix');
+  private readStr(prefix = '', returnEverything = false): string {
+    if (this.index >= this.lines.length) {
+      throw new DiffError(`Index: ${this.index} >= ${this.lines.length}`);
     }
-    
-    const currentLine = this.normalizeLineEnding(this.getCurrentLine());
-    if (currentLine.startsWith(prefix)) {
-      const text = this.getCurrentLine().substring(prefix.length);
-      this.index++;
-      return text;
+    if (this.lines[this.index]!.startsWith(prefix)) {
+      const text = returnEverything
+        ? this.lines[this.index]
+        : this.lines[this.index]!.slice(prefix.length);
+      this.index += 1;
+      return text ?? '';
     }
-    
     return '';
   }
 
   /**
-   * Read current line and advance
+   * Main parsing method - converts patch text to structured Patch object
    */
-  readLine(): string {
-    const line = this.getCurrentLine();
-    this.index++;
-    return line;
-  }
-
-  /**
-   * Normalize line endings for consistent comparison
-   */
-  normalizeLineEnding(line: string): string {
-    return line.replace(/\r$/, '');
-  }
-}
-
-/**
- * Context and chunk information extracted from patch section
- */
-interface SectionResult {
-  contextLines: string[];
-  chunks: ParsingChunk[];
-  endIndex: number;
-  isEof: boolean;
-}
-
-/**
- * PatchParser component responsible for parsing patch text into structured data.
- * Uses composition to integrate with ContextFinder for location matching.
- */
-export class PatchParser {
-  constructor(
-    private readonly options: PatchOptions
-  ) {}
-
-  /**
-   * Parse patch text into structured ParsedPatch object
-   */
-  async parse(
-    patchText: string, 
-    currentFiles: Map<string, string>
-  ): Promise<ParsedPatch> {
-    const startTime = Date.now();
-    const lines = patchText.split('\n');
-    
-    // Validate patch format
-    this.validatePatchFormat(lines);
-    
-    const state = new ParserState(lines, 1); // Skip "*** Begin Patch"
-    const actions = new Map<string, PatchAction>();
-    let contextSearches = 0;
-
-    // Parse all actions until "*** End Patch"
-    while (!state.isDone(['*** End Patch'])) {
-      const action = await this.parseNextAction(state, currentFiles);
-      
-      if (actions.has(action.filePath)) {
-        throw new InvalidPatchFormatError(
-          `Duplicate action for file: ${action.filePath}`,
-          { filePath: action.filePath },
-          state.index
-        );
+  parse(): void {
+    while (!this.isDone([PATCH_SUFFIX])) {
+      // Try to read UPDATE action
+      let path = this.readStr(UPDATE_FILE_PREFIX);
+      if (path) {
+        if (this.patch.actions[path]) {
+          throw new DiffError(`Update File Error: Duplicate Path: ${path}`);
+        }
+        const moveTo = this.readStr(MOVE_FILE_TO_PREFIX);
+        if (!(path in this.currentFiles)) {
+          throw new DiffError(`Update File Error: Missing File: ${path}`);
+        }
+        const text = this.currentFiles[path];
+        const action = this.parseUpdateFile(text ?? '');
+        action.move_path = moveTo || undefined;
+        this.patch.actions[path] = action;
+        continue;
       }
-      
-      actions.set(action.filePath, action);
-      contextSearches += action.chunks.length;
-    }
 
-    // Consume "*** End Patch" sentinel
-    if (!state.startsWith('*** End Patch')) {
-      throw new InvalidPatchFormatError(
-        'Missing *** End Patch sentinel',
-        { currentLine: state.getCurrentLine() },
-        state.index
-      );
-    }
-    state.index++;
-
-    const parseTimeMs = Date.now() - startTime;
-
-    return {
-      actions,
-      fuzzScore: state.fuzz,
-      metadata: {
-        totalLines: lines.length,
-        parseTimeMs,
-        contextSearches
+      // Try to read DELETE action
+      path = this.readStr(DELETE_FILE_PREFIX);
+      if (path) {
+        if (this.patch.actions[path]) {
+          throw new DiffError(`Delete File Error: Duplicate Path: ${path}`);
+        }
+        if (!(path in this.currentFiles)) {
+          throw new DiffError(`Delete File Error: Missing File: ${path}`);
+        }
+        this.patch.actions[path] = { type: ActionType.DELETE, chunks: [] };
+        continue;
       }
-    };
+
+      // Try to read ADD action
+      path = this.readStr(ADD_FILE_PREFIX);
+      if (path) {
+        if (this.patch.actions[path]) {
+          throw new DiffError(`Add File Error: Duplicate Path: ${path}`);
+        }
+        if (path in this.currentFiles) {
+          throw new DiffError(`Add File Error: File already exists: ${path}`);
+        }
+        this.patch.actions[path] = this.parseAddFile();
+        continue;
+      }
+
+      throw new DiffError(`Unknown Line: ${this.lines[this.index]}`);
+    }
+
+    if (!this.startsWith(PATCH_SUFFIX.trim())) {
+      throw new DiffError('Missing End Patch');
+    }
+    this.index += 1;
   }
 
   /**
-   * Validate patch format has proper sentinels
+   * Parse UPDATE file action with context finding and chunk application
    */
-  private validatePatchFormat(lines: string[]): void {
-    if (lines.length < 2) {
-      throw new InvalidPatchFormatError(
-        'Invalid patch text - missing sentinels',
-        { lineCount: lines.length }
-      );
-    }
+  private parseUpdateFile(text: string): PatchAction {
+    const action: PatchAction = { type: ActionType.UPDATE, chunks: [] };
+    const fileLines = text.split('\n');
+    let index = 0;
 
-    const firstLine = this.normalizeLine(lines[0] || '');
-    const lastLine = this.normalizeLine(lines[lines.length - 1] || '');
+    while (
+      !this.isDone([
+        PATCH_SUFFIX,
+        UPDATE_FILE_PREFIX,
+        DELETE_FILE_PREFIX,
+        ADD_FILE_PREFIX,
+        END_OF_FILE_PREFIX,
+      ])
+    ) {
+      const defStr = this.readStr('@@ ');
+      let sectionStr = '';
+      if (!defStr && this.lines[this.index] === '@@') {
+        sectionStr = this.lines[this.index]!;
+        this.index += 1;
+      }
+      if (!(defStr || sectionStr || index === 0)) {
+        throw new DiffError(`Invalid Line:\n${this.lines[this.index]}`);
+      }
 
-    if (!firstLine.startsWith('*** Begin Patch')) {
-      throw new InvalidPatchFormatError(
-        'Invalid patch text - missing *** Begin Patch',
-        { firstLine }
-      );
-    }
+      if (defStr.trim()) {
+        let found = false;
 
-    if (lastLine !== '*** End Patch') {
-      throw new InvalidPatchFormatError(
-        'Invalid patch text - missing *** End Patch',
-        { lastLine }
-      );
-    }
-  }
+        // Canonicalization function matching original implementation
+        const canonLocal = (s: string): string =>
+          s.normalize('NFC').replace(
+            /./gu,
+            (c) =>
+              ((
+                {
+                  '-': '-',
+                  '\u2010': '-',
+                  '\u2011': '-',
+                  '\u2012': '-',
+                  '\u2013': '-',
+                  '\u2014': '-',
+                  '\u2212': '-',
+                  '\u0022': '"',
+                  '\u201C': '"',
+                  '\u201D': '"',
+                  '\u201E': '"',
+                  '\u00AB': '"',
+                  '\u00BB': '"',
+                  '\u0027': "'",
+                  '\u2018': "'",
+                  '\u2019': "'",
+                  '\u201B': "'",
+                  '\u00A0': ' ',
+                  '\u202F': ' ',
+                } as Record<string, string>
+              )[c] ?? c)
+          );
 
-  /**
-   * Parse the next action (UPDATE, ADD, or DELETE)
-   */
-  private async parseNextAction(
-    state: ParserState, 
-    currentFiles: Map<string, string>
-  ): Promise<PatchAction> {
-    const line = state.getCurrentLine();
+        // First try: exact match in lines before current position
+        if (
+          !fileLines
+            .slice(0, index)
+            .some((s) => canonLocal(s) === canonLocal(defStr))
+        ) {
+          for (let i = index; i < fileLines.length; i++) {
+            if (canonLocal(fileLines[i]!) === canonLocal(defStr)) {
+              index = i + 1;
+              found = true;
+              break;
+            }
+          }
+        }
 
-    // Try UPDATE operation
-    const updatePath = state.readWithPrefix('*** Update File: ');
-    if (updatePath) {
-      return this.parseUpdateAction(state, updatePath.trim(), currentFiles);
-    }
-
-    // Try DELETE operation  
-    const deletePath = state.readWithPrefix('*** Delete File: ');
-    if (deletePath) {
-      return this.parseDeleteAction(deletePath.trim(), currentFiles);
-    }
-
-    // Try ADD operation
-    const addPath = state.readWithPrefix('*** Add File: ');
-    if (addPath) {
-      return this.parseAddAction(state, addPath.trim(), currentFiles);
-    }
-
-    // Unknown line
-    throw new InvalidPatchFormatError(
-      `Unknown action line: ${line}`,
-      { line, lineNumber: state.index },
-      state.index
-    );
-  }
-
-  /**
-   * Parse UPDATE file action with chunks
-   */
-  private async parseUpdateAction(
-    state: ParserState,
-    filePath: string,
-    currentFiles: Map<string, string>
-  ): Promise<PatchAction> {
-    // Validate file exists
-    if (!currentFiles.has(filePath)) {
-      throw new FileNotFoundError(
-        filePath,
-        { operation: 'UPDATE' }
-      );
-    }
-
-    // Check for optional move path
-    const movePath = state.readWithPrefix('*** Move to: ');
-    
-    const fileContent = currentFiles.get(filePath)!;
-    const fileLines = fileContent.split('\n');
-    const chunks: ParsingChunk[] = [];
-    let lineIndex = 0;
-
-    // Parse all chunks until next action or end
-    while (!state.isDone([
-      '*** End Patch',
-      '*** Update File:',
-      '*** Delete File:',
-      '*** Add File:',
-      '*** End of File'
-    ])) {
-      // Look for context definition line starting with @@
-      const contextDef = state.readWithPrefix('@@ ');
-      if (contextDef || state.startsWith('@@')) {
-        if (!contextDef && state.normalizeLineEnding(state.getCurrentLine()) === '@@') {
-          state.readLine(); // Consume standalone @@
+        // Second try: trimmed match in lines before current position
+        if (
+          !found &&
+          !fileLines
+            .slice(0, index)
+            .some((s) => canonLocal(s.trim()) === canonLocal(defStr.trim()))
+        ) {
+          for (let i = index; i < fileLines.length; i++) {
+            if (
+              canonLocal(fileLines[i]!.trim()) === canonLocal(defStr.trim())
+            ) {
+              index = i + 1;
+              this.fuzz += 1;
+              found = true;
+              break;
+            }
+          }
         }
       }
 
-      // Parse the section and build chunks
-      const section = this.parseSection(state);
-      const { foundIndex, fuzzScore } = this.findContextInFile(
-        fileLines, 
-        section.contextLines, 
-        lineIndex, 
-        section.isEof
+      // Parse the next section to get context and chunks
+      const [nextChunkContext, chunks, endPatchIndex, eof] = this.peekNextSection(
+        this.lines,
+        this.index
       );
 
-      if (foundIndex === -1) {
-        const contextText = section.contextLines.slice(0, 2).join(' | ');
-        throw new PatchError(
-          `Invalid ${section.isEof ? 'EOF ' : ''}context at ${lineIndex}: ${contextText}`,
-          PatchErrorCode.CONTEXT_NOT_FOUND,
-          { 
-            contextLines: section.contextLines,
-            fileLines: fileLines.length,
-            searchIndex: lineIndex,
-            isEof: section.isEof
-          },
-          filePath,
-          lineIndex
-        );
+      // Find context position in file
+      const [newIndex, fuzz] = this.contextFinder.findContext(
+        fileLines,
+        nextChunkContext,
+        index,
+        eof
+      );
+
+      if (newIndex === -1) {
+        const ctxText = nextChunkContext.join('\n');
+        if (eof) {
+          throw new DiffError(`Invalid EOF Context ${index}:\n${ctxText}`);
+        } else {
+          throw new DiffError(`Invalid Context ${index}:\n${ctxText}`);
+        }
       }
 
-      state.fuzz += fuzzScore;
-
-      // Add chunks with adjusted indices
-      for (const chunk of section.chunks) {
-        chunks.push({
-          origIndex: foundIndex + chunk.origIndex,
-          delLines: chunk.delLines,
-          insLines: chunk.insLines
-        });
+      this.fuzz += fuzz;
+      
+      // Update chunk positions and add to action
+      for (const ch of chunks) {
+        ch.orig_index += newIndex;
+        action.chunks.push(ch);
       }
 
-      lineIndex = foundIndex + section.contextLines.length;
-      state.index = section.endIndex;
+      index = newIndex + nextChunkContext.length;
+      this.index = endPatchIndex;
     }
 
-    return {
-      type: ActionType.UPDATE,
-      chunks: chunks.map(c => ({
-        origIndex: c.origIndex,
-        delLines: c.delLines,
-        insLines: c.insLines,
-        contextLines: [],
-        fuzzScore: 0
-      })),
-      movePath: movePath.trim() || undefined,
-      filePath
-    };
+    return action;
   }
 
   /**
-   * Parse DELETE file action
+   * Parse ADD file action - collect all lines with + prefix
    */
-  private parseDeleteAction(
-    filePath: string,
-    currentFiles: Map<string, string>
-  ): PatchAction {
-    // Validate file exists
-    if (!currentFiles.has(filePath)) {
-      throw new FileNotFoundError(
-        filePath,
-        { operation: 'DELETE' }
-      );
-    }
-
-    return {
-      type: ActionType.DELETE,
-      chunks: [],
-      filePath
-    };
-  }
-
-  /**
-   * Parse ADD file action
-   */
-  private parseAddAction(
-    state: ParserState,
-    filePath: string,
-    currentFiles: Map<string, string>
-  ): PatchAction {
-    // Validate file doesn't exist
-    if (currentFiles.has(filePath)) {
-      throw new FileAlreadyExistsError(
-        filePath,
-        { operation: 'ADD' }
-      );
-    }
-
-    const contentLines: string[] = [];
-
-    // Read all lines until next action
-    while (!state.isDone([
-      '*** End Patch',
-      '*** Update File:', 
-      '*** Delete File:',
-      '*** Add File:'
-    ])) {
-      const line = state.readLine();
-      
-      if (!line.startsWith('+')) {
-        throw new InvalidPatchFormatError(
-          `Invalid Add File line (missing '+'): ${line}`,
-          { line, filePath },
-          state.index - 1
-        );
+  private parseAddFile(): PatchAction {
+    const lines: string[] = [];
+    
+    while (
+      !this.isDone([
+        PATCH_SUFFIX,
+        UPDATE_FILE_PREFIX,
+        DELETE_FILE_PREFIX,
+        ADD_FILE_PREFIX,
+      ])
+    ) {
+      const s = this.readStr();
+      if (!s.startsWith(HUNK_ADD_LINE_PREFIX)) {
+        throw new DiffError(`Invalid Add File Line: ${s}`);
       }
-      
-      contentLines.push(line.substring(1)); // Remove '+' prefix
+      lines.push(s.slice(1));
     }
 
     return {
       type: ActionType.ADD,
-      newFile: contentLines.join('\n'),
+      new_file: lines.join('\n'),
       chunks: [],
-      filePath
     };
   }
 
   /**
-   * Parse a section (context and chunks) from patch text
+   * Parse the next section to extract context and chunks
+   * This is a direct adaptation of peek_next_section from original
    */
-  private parseSection(state: ParserState): SectionResult {
-    const contextLines: string[] = [];
-    const chunks: ParsingChunk[] = [];
+  private peekNextSection(
+    lines: string[],
+    initialIndex: number
+  ): [string[], import('./types').Chunk[], number, boolean] {
+    let index = initialIndex;
+    const old: string[] = [];
     let delLines: string[] = [];
     let insLines: string[] = [];
-    let mode: 'keep' | 'delete' | 'add' = 'keep';
-    const startIndex = state.index;
+    const chunks: import('./types').Chunk[] = [];
+    let mode: 'keep' | 'add' | 'delete' = 'keep';
 
-    while (state.index < state.lines.length) {
-      const line = state.lines[state.index];
-      if (!line) {
-        state.index++;
-        continue;
+    while (index < lines.length) {
+      const s = lines[index]!;
+      if (
+        [
+          '@@',
+          PATCH_SUFFIX,
+          UPDATE_FILE_PREFIX,
+          DELETE_FILE_PREFIX,
+          ADD_FILE_PREFIX,
+          END_OF_FILE_PREFIX,
+        ].some((p) => s.startsWith(p.trim()))
+      ) {
+        break;
       }
+      if (s === '***') {
+        break;
+      }
+      if (s.startsWith('***')) {
+        throw new DiffError(`Invalid Line: ${s}`);
+      }
+      index += 1;
+      const lastMode: 'keep' | 'add' | 'delete' = mode;
+      let line = s;
       
-      // Check for section terminators
-      if (line.startsWith('@@') ||
-          line.startsWith('*** End Patch') ||
-          line.startsWith('*** Update File:') ||
-          line.startsWith('*** Delete File:') ||
-          line.startsWith('*** Add File:') ||
-          line.startsWith('*** End of File')) {
-        break;
-      }
-
-      if (line === '***') {
-        break;
-      }
-
-      if (line.startsWith('***')) {
-        throw new InvalidPatchFormatError(
-          `Invalid line: ${line}`,
-          { line },
-          state.index
-        );
-      }
-
-      state.index++;
-
-      const lastMode: 'keep' | 'delete' | 'add' = mode;
-      let processedLine = line;
-
-      // Handle @@ context markers - treat as context lines
-      if (line.startsWith('@@')) {
-        // Extract the context definition from @@ line
-        const contextMatch = line.match(/^@@ (.+)/);
-        if (contextMatch && contextMatch[1]) {
-          // Treat the content after @@ as a context line
-          processedLine = ' ' + contextMatch[1];
-        } else if (line === '@@') {
-          // Skip standalone @@ markers
-          continue;
-        } else {
-          // Treat the entire @@ line as context
-          processedLine = ' ' + line;
-        }
-      }
-
-      // Handle empty lines as space-prefixed
-      if (processedLine === '') {
-        processedLine = ' ';
-      }
-
-      // Determine line mode based on prefix
-      if (processedLine.startsWith('+')) {
+      if (line[0] === HUNK_ADD_LINE_PREFIX) {
         mode = 'add';
-      } else if (processedLine.startsWith('-')) {
+      } else if (line[0] === '-') {
         mode = 'delete';
-      } else if (processedLine.startsWith(' ')) {
+      } else if (line[0] === ' ') {
         mode = 'keep';
       } else {
-        throw new InvalidPatchFormatError(
-          `Invalid line prefix: ${line}`,
-          { line },
-          state.index - 1
-        );
+        // Tolerate invalid lines where the leading whitespace is missing
+        mode = 'keep';
+        line = ' ' + line;
       }
 
-      // Remove prefix
-      const content = processedLine.substring(1);
-
-      // Handle mode transitions
+      line = line.slice(1);
+      
       if (mode === 'keep' && lastMode !== mode) {
-        if (insLines.length > 0 || delLines.length > 0) {
+        if (insLines.length || delLines.length) {
           chunks.push({
-            origIndex: contextLines.length - delLines.length,
-            delLines: [...delLines],
-            insLines: [...insLines]
+            orig_index: old.length - delLines.length,
+            del_lines: delLines,
+            ins_lines: insLines,
           });
         }
         delLines = [];
         insLines = [];
       }
-
-      // Process line based on mode
+      
       if (mode === 'delete') {
-        delLines.push(content);
-        contextLines.push(content);
+        delLines.push(line);
+        old.push(line);
       } else if (mode === 'add') {
-        insLines.push(content);
-      } else if (mode === 'keep') {
-        contextLines.push(content);
+        insLines.push(line);
+      } else {
+        old.push(line);
       }
     }
-
-    // Add final chunk if needed
-    if (insLines.length > 0 || delLines.length > 0) {
+    
+    if (insLines.length || delLines.length) {
       chunks.push({
-        origIndex: contextLines.length - delLines.length,
-        delLines,
-        insLines
+        orig_index: old.length - delLines.length,
+        del_lines: delLines,
+        ins_lines: insLines,
       });
     }
-
-    // Check for EOF marker
-    let isEof = false;
-    if (state.index < state.lines.length && 
-        state.lines[state.index] === '*** End of File') {
-      isEof = true;
-      state.index++;
+    
+    if (index < lines.length && lines[index] === END_OF_FILE_PREFIX) {
+      index += 1;
+      return [old, chunks, index, true];
     }
-
-    if (state.index === startIndex) {
-      throw new InvalidPatchFormatError(
-        'Nothing in this section',
-        { startIndex },
-        startIndex
-      );
-    }
-
-    return {
-      contextLines,
-      chunks,
-      endIndex: state.index,
-      isEof
-    };
+    
+    return [old, chunks, index, false];
   }
 
   /**
-   * Find context lines in file with fuzzy matching
+   * Get the parsed patch object
    */
-  private findContextInFile(
-    fileLines: string[],
-    contextLines: string[],
-    startIndex: number,
-    isEof: boolean
-  ): { foundIndex: number; fuzzScore: number } {
-    if (contextLines.length === 0) {
-      return { foundIndex: startIndex, fuzzScore: 0 };
-    }
-
-    // Handle EOF context specially
-    if (isEof) {
-      const eofResult = this.findContextCore(
-        fileLines, 
-        contextLines, 
-        fileLines.length - contextLines.length
-      );
-      if (eofResult.foundIndex !== -1) {
-        return eofResult;
-      }
-      
-      // Fall back to normal search with EOF penalty
-      const normalResult = this.findContextCore(fileLines, contextLines, startIndex);
-      return {
-        foundIndex: normalResult.foundIndex,
-        fuzzScore: normalResult.fuzzScore + 10000
-      };
-    }
-
-    return this.findContextCore(fileLines, contextLines, startIndex);
+  getPatch(): Patch {
+    return this.patch;
   }
 
   /**
-   * Core context finding with progressive fuzzy matching
+   * Get the accumulated fuzz score
    */
-  private findContextCore(
-    fileLines: string[],
-    contextLines: string[],
-    startIndex: number
-  ): { foundIndex: number; fuzzScore: number } {
-    // Try exact match
-    for (let i = startIndex; i <= fileLines.length - contextLines.length; i++) {
-      const slice = fileLines.slice(i, i + contextLines.length);
-      if (this.arraysEqual(slice, contextLines)) {
-        return { foundIndex: i, fuzzScore: 0 };
-      }
-    }
-
-    // Try trailing whitespace match
-    for (let i = startIndex; i <= fileLines.length - contextLines.length; i++) {
-      const slice = fileLines.slice(i, i + contextLines.length);
-      const sliceRTrimmed = slice.map(line => line.replace(/\s+$/, ''));
-      const contextRTrimmed = contextLines.map(line => line.replace(/\s+$/, ''));
-      if (this.arraysEqual(sliceRTrimmed, contextRTrimmed)) {
-        return { foundIndex: i, fuzzScore: 1 };
-      }
-    }
-
-    // Try all whitespace match if enabled
-    if (this.options.fuzzyMatching.ignoreAllWhitespace) {
-      for (let i = startIndex; i <= fileLines.length - contextLines.length; i++) {
-        const slice = fileLines.slice(i, i + contextLines.length);
-        const sliceTrimmed = slice.map(line => line.trim());
-        const contextTrimmed = contextLines.map(line => line.trim());
-        if (this.arraysEqual(sliceTrimmed, contextTrimmed)) {
-          return { foundIndex: i, fuzzScore: 100 };
-        }
-      }
-    }
-
-    return { foundIndex: -1, fuzzScore: 0 };
+  getFuzz(): number {
+    return this.fuzz;
   }
+}
 
-  /**
-   * Check if two string arrays are equal
-   */
-  private arraysEqual(a: string[], b: string[]): boolean {
-    if (a.length !== b.length) return false;
-    return a.every((val, index) => val === b[index]);
+/**
+ * High-level function to convert patch text to structured Patch object
+ * Direct adaptation of text_to_patch from original
+ */
+export function textToPatch(
+  text: string,
+  orig: Record<string, string>
+): [Patch, number] {
+  const lines = text.trim().split('\n');
+  if (
+    lines.length < 2 ||
+    !(lines[0] ?? '').startsWith(PATCH_PREFIX.trim()) ||
+    lines[lines.length - 1] !== PATCH_SUFFIX.trim()
+  ) {
+    let reason = 'Invalid patch text: ';
+    if (lines.length < 2) {
+      reason += 'Patch text must have at least two lines.';
+    } else if (!(lines[0] ?? '').startsWith(PATCH_PREFIX.trim())) {
+      reason += 'Patch text must start with the correct patch prefix.';
+    } else if (lines[lines.length - 1] !== PATCH_SUFFIX.trim()) {
+      reason += 'Patch text must end with the correct patch suffix.';
+    }
+    throw new DiffError(reason);
   }
+  
+  const parser = new PatchParser(orig, lines);
+  parser.index = 1;
+  parser.parse();
+  return [parser.getPatch(), parser.getFuzz()];
+}
 
-  /**
-   * Normalize line ending for consistent processing
-   */
-  private normalizeLine(line: string): string {
-    return line.replace(/\r$/, '');
+/**
+ * Identify files that need to be loaded for UPDATE and DELETE operations
+ */
+export function identifyFilesNeeded(text: string): string[] {
+  const lines = text.trim().split('\n');
+  const result = new Set<string>();
+  for (const line of lines) {
+    if (line.startsWith(UPDATE_FILE_PREFIX)) {
+      result.add(line.slice(UPDATE_FILE_PREFIX.length));
+    }
+    if (line.startsWith(DELETE_FILE_PREFIX)) {
+      result.add(line.slice(DELETE_FILE_PREFIX.length));
+    }
   }
+  return [...result];
+}
+
+/**
+ * Identify files that will be added
+ */
+export function identifyFilesAdded(text: string): string[] {
+  const lines = text.trim().split('\n');
+  const result = new Set<string>();
+  for (const line of lines) {
+    if (line.startsWith(ADD_FILE_PREFIX)) {
+      result.add(line.slice(ADD_FILE_PREFIX.length));
+    }
+  }
+  return [...result];
+}
+
+/**
+ * Identify files that will be deleted
+ */
+export function identifyFilesDeleted(text: string): string[] {
+  const lines = text.trim().split('\n');
+  const result = new Set<string>();
+  for (const line of lines) {
+    if (line.startsWith(DELETE_FILE_PREFIX)) {
+      result.add(line.slice(DELETE_FILE_PREFIX.length));
+    }
+  }
+  return [...result];
+}
+
+/**
+ * Identify files that will be updated (not including deleted files)
+ */
+export function identifyFilesUpdated(text: string): string[] {
+  const lines = text.trim().split('\n');
+  const result = new Set<string>();
+  for (const line of lines) {
+    if (line.startsWith(UPDATE_FILE_PREFIX)) {
+      result.add(line.slice(UPDATE_FILE_PREFIX.length));
+    }
+  }
+  return [...result];
 }

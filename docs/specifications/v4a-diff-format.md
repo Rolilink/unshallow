@@ -346,34 +346,116 @@ When making multiple changes within the same file, avoid duplicating context lin
 *** End Patch
 ```
 
-## Usage with apply_patch
+## Usage with PatchDiff
 
-The V4A format is designed to work with the `apply_patch` command:
+The V4A format is designed to work with the `PatchDiff` class programmatically:
 
-```bash
-apply_patch <<"EOF"
-*** Begin Patch
+```typescript
+import { PatchDiff } from '../src/core/patch-diff';
+import { FileSystem } from '../src/core/file-system';
+
+const fileSystem = new FileSystem();
+const patchDiff = new PatchDiff(fileSystem, '/project/root');
+
+const patch = `*** Begin Patch
 *** Update File: example.py
 @@ def my_function():
      existing_code = "unchanged"
 -    old_value = "remove"
 +    new_value = "replace"
      more_code = "unchanged"
-*** End Patch
-EOF
+*** End Patch`;
+
+// Apply the patch
+const result = await patchDiff.apply(patch);
+
+if (result.success) {
+  console.log(`Applied ${result.changes?.length} changes with fuzz score ${result.fuzz}`);
+  result.changes?.forEach(change => {
+    console.log(`${change.type}: ${change.path}`);
+  });
+} else {
+  console.error('Patch failed:', result.error?.message);
+}
 ```
 
-### Command Structure
+### API Methods
 
-1. **Invocation**: `apply_patch <<"EOF"`
-2. **Patch Content**: Complete V4A diff specification
-3. **Termination**: `EOF`
+#### `apply(patchText: string): Promise<PatchResult>`
+Applies the patch to the file system and returns the result.
+
+#### `validate(patchText: string): ValidationResult`  
+Validates patch syntax and security rules without applying changes.
+
+#### `preview(patchText: string): Promise<PreviewResult>`
+Shows what files would be affected without making changes.
+
+### API Structure
+
+1. **Initialization**: Create PatchDiff with IFileSystem implementation and root path
+2. **Validation**: Optional validation before applying using `validate()`
+3. **Preview**: Optional preview of changes using `preview()`
+4. **Application**: Apply patch using `apply()` and receive structured result
+5. **Error Handling**: Structured error responses with detailed information
 
 ### Expected Output
 
-- **Success**: Python outputs "Done!" at the end
-- **Errors**: Warning messages appear before "Done!"
-- **Status**: Check messages before "Done!" to verify success
+#### Successful Application
+```typescript
+{
+  success: true,
+  changes: [
+    {
+      type: 'UPDATE',
+      path: 'example.py',
+      old_content: 'old content...',
+      new_content: 'new content...',
+      move_path: undefined
+    }
+  ],
+  fuzz: 0
+}
+```
+
+#### Failed Application
+```typescript
+{
+  success: false,
+  error: {
+    message: 'File not found: missing.py',
+    type: 'MissingFileError'
+  }
+}
+```
+
+#### Validation Result
+```typescript
+{
+  valid: true,
+  errors: []
+}
+```
+
+#### Preview Result
+```typescript
+{
+  files: [
+    {
+      path: 'example.py',
+      action: 'UPDATE',
+      preview: 'File will be updated'
+    }
+  ]
+}
+```
+
+### Fuzz Score Interpretation
+
+- **0**: Perfect context match
+- **1**: Trailing whitespace differences  
+- **100**: All whitespace differences
+- **10000+**: EOF context found in wrong location
+- **Higher values**: Lower match quality
 
 ## Best Practices
 

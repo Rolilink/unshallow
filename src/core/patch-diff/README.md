@@ -1,605 +1,310 @@
-# TypeScript Patch Diff Module
+# Patch-Diff System
 
-## Table of Contents
-- [Architecture Overview](#architecture-overview)
-- [API Contracts](#api-contracts)
-- [Type Definitions](#type-definitions)
-- [Security Model](#security-model)
-- [Component Composition](#component-composition)
-- [Usage Examples](#usage-examples)
-- [Error Handling](#error-handling)
+## Overview
 
-## Architecture Overview
+The patch-diff system provides a robust, context-based approach to applying code changes using the V4A (Version 4A) diff format. Unlike traditional line-based diffs, it uses surrounding code context to locate and modify specific sections within files, making it resilient to file changes and formatting variations.
 
-The TypeScript Patch Diff module is a context-based patching system designed specifically for applying AI-generated code modifications. It migrates the existing Python `patch_diff.py` utility to TypeScript with enhanced security features including permission models and file access control.
-
-### Design Principles
-
-1. **Composition Over Inheritance**: All components use composition to collaborate
-2. **Security First**: Built-in permission model and file access control
-3. **Type Safety**: Full TypeScript typing with zero `any` usage
-4. **Context-Based Matching**: Uses code content as anchors instead of line numbers
-5. **Fuzzy Matching**: Handles whitespace variations gracefully
-6. **Hard Dependencies**: FileSystem is a hard dependency, not injected
-
-### System Architecture
-
-```mermaid
-graph TB
-    subgraph "Public API"
-        PD[PatchDiff]
-    end
-    
-    subgraph "Core Components"
-        PP[PatchParser]
-        SV[SecurityValidator]
-        CF[ContextFinder]
-        CA[ChunkApplicator]
-    end
-    
-    subgraph "Infrastructure"
-        FS[IFileSystem]
-        T[Types & Interfaces]
-    end
-    
-    PD --> PP
-    PD --> SV
-    PD --> CF
-    PD --> CA
-    PD --> FS
-    
-    PP --> T
-    SV --> T
-    CF --> T
-    CA --> T
-    
-    PP --> CF
-    CA --> CF
-    
-    style PD fill:#e1f5fe
-    style FS fill:#f3e5f5
-    style T fill:#e8f5e8
-```
-
-### Data Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant PatchDiff
-    participant SecurityValidator
-    participant PatchParser
-    participant ContextFinder
-    participant ChunkApplicator
-    participant FileSystem
-    
-    Client->>PatchDiff: apply(patchText)
-    PatchDiff->>SecurityValidator: validatePermissions(actions)
-    SecurityValidator-->>PatchDiff: validation result
-    
-    PatchDiff->>PatchParser: parse(patchText, currentFiles)
-    PatchParser->>ContextFinder: findContext(fileContent, contextLines)
-    ContextFinder-->>PatchParser: location + fuzz score
-    PatchParser-->>PatchDiff: ParsedPatch
-    
-    PatchDiff->>SecurityValidator: validateFileAccess(filePaths)
-    SecurityValidator-->>PatchDiff: access validation
-    
-    PatchDiff->>ChunkApplicator: generateCommit(patch, currentFiles)
-    ChunkApplicator->>ContextFinder: verifyChunkLocations(chunks)
-    ContextFinder-->>ChunkApplicator: verified locations
-    ChunkApplicator-->>PatchDiff: Commit
-    
-    PatchDiff->>FileSystem: applyCommit(commit)
-    FileSystem-->>PatchDiff: success/failure
-    PatchDiff-->>Client: PatchResult
-```
-
-## API Contracts
-
-### Main PatchDiff Class
+## Installation
 
 ```typescript
-export class PatchDiff {
-  constructor(
-    private readonly fileSystem: IFileSystem,
-    private readonly options: PatchOptions = DEFAULT_PATCH_OPTIONS
-  );
+import { PatchDiff } from './index';
+import { FileSystem } from '../file-system';
+
+const fileSystem = new FileSystem();
+const patchDiff = new PatchDiff(fileSystem, '/project/root');
+```
+
+## API Reference
+
+### PatchDiff Class
+
+```typescript
+class PatchDiff {
+  constructor(fileSystem: IFileSystem, rootPath: string);
   
-  /**
-   * Apply a patch and return detailed results
-   */
+  // Apply a V4A format patch
   async apply(patchText: string): Promise<PatchResult>;
   
-  /**
-   * Validate a patch without applying it
-   */
-  async validate(patchText: string): Promise<PatchValidationResult>;
+  // Validate patch without applying
+  validate(patchText: string): ValidationResult;
   
-  /**
-   * Parse patch text and return structured representation
-   */
-  async parse(patchText: string): Promise<ParsedPatch>;
+  // Preview changes without applying
+  async preview(patchText: string): Promise<PreviewResult>;
 }
 ```
-
-### Core Interfaces
-
-```typescript
-// Primary result interface
-interface PatchResult {
-  success: boolean;
-  filesModified: number;
-  filesCreated: number;
-  filesDeleted: number;
-  filesMoved: number;
-  fuzzScore: number;
-  executionTimeMs: number;
-  modifiedFiles: string[];
-  fileContents: Map<string, string>;  // New content of all modified files
-  warnings: string[];
-  error?: PatchError;
-}
-
-// Configuration interface
-interface PatchOptions {
-  fuzzyMatching: FuzzyMatchingConfig;
-  permissions: PatchPermissions;
-  fileAccess: FileAccessControl;
-  validateBeforeApply: boolean;
-  createBackups: boolean;
-  timeoutMs: number;
-  stopOnFirstError: boolean;
-}
-```
-
-### Component Interfaces
-
-```typescript
-// Parser component
-interface IPatchParser {
-  parse(patchText: string, currentFiles: Map<string, string>): Promise<ParsedPatch>;
-}
-
-// Security validator component  
-interface ISecurityValidator {
-  validatePermissions(actions: Map<string, PatchAction>): Promise<ValidationResult>;
-  validateFileAccess(filePaths: string[]): Promise<ValidationResult>;
-}
-
-// Context finder component
-interface IContextFinder {
-  findContext(fileContent: string, contextLines: string[]): Promise<ContextMatch>;
-}
-
-// Chunk applicator component
-interface IChunkApplicator {
-  generateCommit(patch: ParsedPatch, currentFiles: Map<string, string>): Promise<Commit>;
-  applyChunks(originalContent: string, chunks: Chunk[]): string;
-}
-```
-
-## Type Definitions
-
-### Core Action Types
-
-```typescript
-enum ActionType {
-  ADD = 'add',
-  DELETE = 'delete', 
-  UPDATE = 'update'
-}
-
-interface PatchAction {
-  type: ActionType;
-  newFile?: string;           // For ADD actions
-  chunks: Chunk[];            // For UPDATE actions
-  movePath?: string;          // For file moves
-  filePath: string;           // Original file path
-}
-
-interface Chunk {
-  origIndex: number;          // Index in original file
-  delLines: string[];         // Lines to delete
-  insLines: string[];         // Lines to insert
-  contextLines?: string[];    // Context used for finding location
-  fuzzScore?: number;         // Matching fuzz score
-}
-```
-
-### Security Types
-
-```typescript
-interface PatchPermissions {
-  allowFileCreation: boolean;
-  allowFileDeletion: boolean;
-  allowFileUpdates: boolean;
-  allowFileMoving: boolean;
-  allowDirectoryCreation: boolean;
-}
-
-interface FileAccessControl {
-  allowedPaths: string[];     // Glob patterns for allowed files
-  forbiddenPaths: string[];   // Glob patterns for forbidden files
-  whitelistMode: boolean;     // Only allowedPaths can be modified
-  maxFilesPerPatch: number;   // Maximum files per patch operation
-}
-```
-
-### Result Types
-
-```typescript
-interface ParsedPatch {
-  actions: Map<string, PatchAction>;
-  fuzzScore: number;
-  metadata: {
-    totalLines: number;
-    parseTimeMs: number;
-    contextSearches: number;
-  };
-}
-
-interface Commit {
-  changes: Map<string, FileChange>;
-  metadata: {
-    totalFiles: number;
-    createdAt: Date;
-    id: string;
-  };
-}
-```
-
-## Security Model
-
-### Permission-Based Access Control
-
-The security model enforces operation-level permissions to prevent unauthorized actions:
-
-```mermaid
-flowchart TD
-    A[Patch Action] --> B{Check Permission}
-    B -->|ADD| C{allowFileCreation?}
-    B -->|DELETE| D{allowFileDeletion?}
-    B -->|UPDATE| E{allowFileUpdates?}
-    B -->|MOVE| F{allowFileMoving?}
-    
-    C -->|Yes| G[Check File Access]
-    C -->|No| H[REJECT: Creation forbidden]
-    D -->|Yes| G
-    D -->|No| I[REJECT: Deletion forbidden]
-    E -->|Yes| G
-    E -->|No| J[REJECT: Updates forbidden]
-    F -->|Yes| G
-    F -->|No| K[REJECT: Moving forbidden]
-    
-    G --> L{File Path Allowed?}
-    L -->|Yes| M[ALLOW]
-    L -->|No| N[REJECT: Path forbidden]
-```
-
-### File Access Control Modes
-
-**Whitelist Mode** (Secure by default):
-```typescript
-const secureOptions: PatchOptions = {
-  fileAccess: {
-    allowedPaths: ['src/**/*.ts', 'tests/**/*.test.ts'],
-    forbiddenPaths: [],
-    whitelistMode: true,  // Only allowedPaths can be modified
-    maxFilesPerPatch: 5
-  }
-};
-```
-
-**Blacklist Mode** (Permissive with restrictions):
-```typescript
-const permissiveOptions: PatchOptions = {
-  fileAccess: {
-    allowedPaths: ['**/*'],
-    forbiddenPaths: ['*.env', 'src/config/*', '.git/**'],
-    whitelistMode: false,  // All paths except forbiddenPaths
-    maxFilesPerPatch: 20
-  }
-};
-```
-
-### Security Validation Flow
-
-```mermaid
-graph TD
-    A[Parse Patch] --> B[Extract File Paths]
-    B --> C[Check Operation Permissions]
-    C --> D{All Operations Allowed?}
-    D -->|No| E[Throw PermissionError]
-    D -->|Yes| F[Check File Access Control]
-    F --> G{All Paths Allowed?}
-    G -->|No| H[Throw FileAccessError]
-    G -->|Yes| I[Check File Count Limit]
-    I --> J{Within Limit?}
-    J -->|No| K[Throw FileLimitError]
-    J -->|Yes| L[Proceed with Patch]
-```
-
-## Component Composition
-
-The module uses composition to combine specialized components without inheritance:
-
-```mermaid
-classDiagram
-    class PatchDiff {
-        -fileSystem: IFileSystem
-        -options: PatchOptions
-        -parser: PatchParser
-        -validator: SecurityValidator
-        -contextFinder: ContextFinder
-        -applicator: ChunkApplicator
-        +apply(patchText) Promise~PatchResult~
-        +validate(patchText) Promise~ValidationResult~
-        +parse(patchText) Promise~ParsedPatch~
-    }
-    
-    class PatchParser {
-        -contextFinder: ContextFinder
-        -options: PatchOptions
-        +parse(patchText, files) Promise~ParsedPatch~
-        -parseAction(line) PatchAction
-        -buildChunks(lines) Chunk[]
-    }
-    
-    class SecurityValidator {
-        -options: PatchOptions
-        +validatePermissions(actions) Promise~ValidationResult~
-        +validateFileAccess(paths) Promise~ValidationResult~
-        -checkGlobPattern(path, pattern) boolean
-    }
-    
-    class ContextFinder {
-        -options: PatchOptions
-        +findContext(content, context) Promise~ContextMatch~
-        -exactMatch(content, context) number
-        -fuzzyMatch(content, context) ContextMatch
-    }
-    
-    class ChunkApplicator {
-        -contextFinder: ContextFinder
-        -options: PatchOptions
-        +generateCommit(patch, files) Promise~Commit~
-        +applyChunks(content, chunks) string
-        -validateChunkOrder(chunks) void
-    }
-    
-    PatchDiff *-- PatchParser
-    PatchDiff *-- SecurityValidator
-    PatchDiff *-- ContextFinder
-    PatchDiff *-- ChunkApplicator
-    PatchParser *-- ContextFinder
-    ChunkApplicator *-- ContextFinder
-```
-
-### Context Finding Algorithm
-
-```mermaid
-flowchart TD
-    A[Start Context Search] --> B[Try Exact Match]
-    B --> C{Found?}
-    C -->|Yes| D[Return index, fuzz=0]
-    C -->|No| E[Try Trailing Whitespace Match]
-    E --> F{Found?}
-    F -->|Yes| G[Return index, fuzz=1]
-    F -->|No| H[Try All Whitespace Match]
-    H --> I{Found?}
-    I -->|Yes| J[Return index, fuzz=100]
-    I -->|No| K{EOF Context?}
-    K -->|Yes| L[Search from End of File]
-    K -->|No| M[Return -1, not found]
-    L --> N{Found at EOF?}
-    N -->|Yes| O[Return index, fuzz=10000+]
-    N -->|No| M
-```
-
-## Usage Examples
 
 ### Basic Usage
 
 ```typescript
-import { PatchDiff, DEFAULT_PATCH_OPTIONS } from '../patch-diff';
-import { FileSystem } from '../file-system';
+const patch = `*** Begin Patch
+*** Update File: hello.py
+@@ def greet(name):
+    """Greet someone by name"""
+-    print(f"Hello {name}")
++    print(f"Hello, {name}!")
++    print(f"Nice to meet you!")
+*** End Patch`;
 
-// Create patch diff instance with file system dependency and default options
-const fileSystem = new FileSystem();
-const patchDiff = new PatchDiff(fileSystem, DEFAULT_PATCH_OPTIONS);
+const result = await patchDiff.apply(patch);
 
-// Apply a simple patch
-const patchText = `
-*** Begin Patch
-*** Update File: src/utils.ts
-@@ export function formatDate(date: Date) {
--  return date.toISOString();
-+  return date.toLocaleDateString('en-US');
-}
-*** End Patch
-`;
-
-const result = await patchDiff.apply(patchText);
-console.log(`Applied patch: ${result.success ? 'Success' : 'Failed'}`);
-console.log(`Files modified: ${result.filesModified}`);
-
-// Access the new file contents
 if (result.success) {
-  for (const [filePath, content] of result.fileContents) {
-    console.log(`Updated ${filePath}:`);
-    console.log(content);
-  }
+  console.log('Applied changes:', result.changes);
+  console.log('Fuzz score:', result.fuzz); // 0 = perfect match
+} else {
+  console.error('Failed:', result.error);
 }
 ```
 
-### Secure Configuration
+### Validation
 
 ```typescript
-// Restrictive configuration for production use
-const secureOptions: PatchOptions = {
-  permissions: {
-    allowFileCreation: false,     // Block new file creation
-    allowFileDeletion: false,     // Block file deletion
-    allowFileUpdates: true,       // Allow updates only
-    allowFileMoving: false,       // Block file moves
-    allowDirectoryCreation: false
-  },
-  fileAccess: {
-    allowedPaths: [
-      'src/**/*.ts',              // Only TypeScript source files
-      'src/**/*.tsx',             // Only TypeScript React files
-      'tests/**/*.test.ts'        // Only test files
-    ],
-    forbiddenPaths: [
-      'src/config/*',             // Block config files
-      '*.env',                    // Block environment files
-      'package.json',             // Block package.json
-      '.git/**'                   // Block git files
-    ],
-    whitelistMode: true,          // Strict whitelist mode
-    maxFilesPerPatch: 3           // Limit to 3 files per patch
-  },
-  validateBeforeApply: true,      // Always validate first
-  stopOnFirstError: true          // Stop on first error
-};
+const validation = patchDiff.validate(patchText);
 
-// Create patch diff with secure configuration
-const fileSystem = new FileSystem();
-const securePatchDiff = new PatchDiff(fileSystem, secureOptions);
-
-const result = await securePatchDiff.apply(patchText);
+if (!validation.valid) {
+  console.error('Validation errors:', validation.errors);
+  console.warn('Warnings:', validation.warnings);
+}
 ```
 
-### Validation Only
+### Preview Changes
 
 ```typescript
-// Validate patch without applying changes
-const validation = await securePatchDiff.validate(patchText);
+const preview = await patchDiff.preview(patchText);
 
-if (!validation.isValid) {
-  console.error('Patch validation failed:');
-  validation.errors.forEach(error => console.error(`- ${error}`));
-  return;
-}
-
-console.log('Patch validation passed');
-console.log(`Would affect ${validation.affectedFiles.length} files`);
-console.log(`Estimated fuzz score: ${validation.estimatedFuzzScore}`);
+preview.files.forEach(file => {
+  console.log(`${file.action}: ${file.path}`);
+});
 ```
 
-### Error Handling
+## Result Types
+
+### PatchResult
 
 ```typescript
-try {
-  const result = await securePatchDiff.apply(patchText);
-  
-  if (!result.success) {
-    console.error(`Patch failed: ${result.error?.message}`);
-    if (result.error instanceof FileAccessError) {
-      console.error(`Forbidden file: ${result.error.filePath}`);
-    }
-  }
-} catch (error) {
-  if (error instanceof PatchError) {
-    console.error(`Patch error: ${error.code} - ${error.message}`);
-    console.error(`Context: ${JSON.stringify(error.context)}`);
-  } else {
-    console.error(`Unexpected error: ${error.message}`);
-  }
+interface PatchResult {
+  success: boolean;
+  changes?: FileChange[];    // Applied changes
+  fuzz?: number;            // Context matching quality (0=perfect)
+  error?: Error;            // Error if failed
 }
 ```
 
-### Batch Processing
+### FileChange
 
 ```typescript
-// Process multiple patches with same configuration
-const patches = [patch1, patch2, patch3];
-const results: PatchResult[] = [];
-
-for (const patch of patches) {
-  try {
-    const result = await securePatchDiff.apply(patch);
-    results.push(result);
-    
-    if (!result.success && securePatchDiff.options.stopOnFirstError) {
-      break;
-    }
-  } catch (error) {
-    console.error(`Failed to apply patch: ${error.message}`);
-    break;
-  }
-}
-
-// Summary
-const successful = results.filter(r => r.success).length;
-const totalFiles = results.reduce((sum, r) => sum + r.filesModified, 0);
-console.log(`Applied ${successful}/${patches.length} patches`);
-console.log(`Modified ${totalFiles} files total`);
-
-// Access all modified file contents
-const allModifiedContents = new Map<string, string>();
-for (const result of results) {
-  if (result.success) {
-    for (const [filePath, content] of result.fileContents) {
-      allModifiedContents.set(filePath, content);
-    }
-  }
+interface FileChange {
+  type: ActionType;         // 'add', 'update', 'delete'
+  old_content?: string;     // Original content
+  new_content?: string;     // New content  
+  move_path?: string;       // New path for move operations
 }
 ```
+
+## Supported Operations
+
+### Update File
+
+```typescript
+const patch = `*** Begin Patch
+*** Update File: src/utils.py
+@@ def calculate(x):
+-    return x * 2
++    return x * 3
+*** End Patch`;
+```
+
+### Add File
+
+```typescript
+const patch = `*** Begin Patch
+*** Add File: src/new-module.py
++def new_function():
++    return "Hello World"
+*** End Patch`;
+```
+
+### Delete File
+
+```typescript
+const patch = `*** Begin Patch
+*** Delete File: src/old-module.py
+*** End Patch`;
+```
+
+### Move File
+
+```typescript
+const patch = `*** Begin Patch
+*** Update File: old-location.py
+*** Move to: src/new-location.py
+@@ class Processor:
+-    """Old documentation"""
++    """Updated documentation"""
+*** End Patch`;
+```
+
+### Multiple Files
+
+```typescript
+const patch = `*** Begin Patch
+*** Update File: main.py
+@@ def main():
+-    old_function()
++    new_function()
+
+*** Add File: helpers.py
++def new_function():
++    return "Updated logic"
+
+*** Delete File: legacy.py
+*** End Patch`;
+```
+
+## Advanced Features
+
+### Hierarchical Context
+
+When the same code pattern appears multiple times, use `@@` markers:
+
+```typescript
+const patch = `*** Begin Patch
+*** Update File: models.py
+@@ class User:
+    def update(self):
+-        print("Old User update")
++        print("New User update")
+
+@@ class Product:
+    def update(self):
+-        print("Old Product update")  
++        print("New Product update")
+*** End Patch`;
+```
+
+### Unicode Normalization
+
+The system automatically handles Unicode variants:
+
+```typescript
+// These will match despite different Unicode characters:
+// EN DASH (–) matches ASCII hyphen (-)
+// Smart quotes (") match straight quotes (")
+// Non-breaking spaces match regular spaces
+```
+
+### Fuzzy Matching
+
+Context matching uses a 3-pass algorithm:
+
+1. **Exact match** (fuzz = 0): Perfect context match
+2. **Trim trailing whitespace** (fuzz = 1): Good match
+3. **Trim all whitespace** (fuzz = 100): Fuzzy match
+
+Higher fuzz scores indicate less precise matches.
 
 ## Error Handling
 
-### Error Hierarchy
+### Error Types
 
 ```typescript
-class PatchError extends Error {
-  constructor(
-    message: string,
-    public readonly code: PatchErrorCode,
-    public readonly context?: Record<string, unknown>,
-    public readonly filePath?: string,
-    public readonly lineNumber?: number
-  );
-}
-
-// Specific error types
-class InvalidPatchFormatError extends PatchError;
-class FileNotFoundError extends PatchError;
-class FileAlreadyExistsError extends PatchError;
-class ContextNotFoundError extends PatchError;
-class FileSystemError extends PatchError;
-class PermissionDeniedError extends PatchError;
-class FileAccessDeniedError extends PatchError;
+import {
+  DiffError,           // Base error
+  FileNotFoundError,   // File doesn't exist
+  FileExistsError,     // File already exists for ADD
+  InvalidPatchError,   // Malformed patch
+  SecurityError,       // Path validation failed
+  ContextNotFoundError // Context not found in file
+} from './index';
 ```
 
-### Error Context
-
-All errors include rich context for debugging:
+### Common Error Scenarios
 
 ```typescript
 try {
-  await securePatchDiff.apply(patchText);
+  const result = await patchDiff.apply(patch);
 } catch (error) {
-  if (error instanceof ContextNotFoundError) {
-    console.error(error.getFullMessage());
-    // Output: "CONTEXT_NOT_FOUND: Context not found in src/utils.ts: def greet(name) | print(f"Hello {name}") (in src/utils.ts:15) - Context: {"contextLines":["def greet(name):","    print(f\"Hello {name}\")"],"searchAttempts":3}"
+  if (error instanceof FileNotFoundError) {
+    console.error('File missing:', error.message);
+  } else if (error instanceof ContextNotFoundError) {
+    console.error('Context not found:', error.message);
+  } else if (error instanceof SecurityError) {
+    console.error('Security violation:', error.message);
   }
 }
 ```
 
-### Validation Results
+## Security Features
 
-Non-throwing validation provides detailed feedback:
+### Path Validation
+
+- **No absolute paths**: All paths must be relative
+- **No directory traversal**: `../` patterns are blocked
+- **Root confinement**: All operations stay within the specified root directory
+
+### Safe File Operations
+
+- **Atomic operations**: All changes applied together or not at all
+- **Parent directory creation**: Automatically creates needed directories
+- **Conflict detection**: Prevents overwriting existing files during ADD operations
+
+## Integration with File Systems
+
+The PatchDiff class works with any implementation of `IFileSystem`:
 
 ```typescript
-interface PatchValidationResult {
-  isValid: boolean;
-  errors: string[];           // Blocking errors
-  warnings: string[];         // Non-blocking warnings
-  affectedFiles: string[];    // Files that would be changed
-  estimatedFuzzScore: number; // Expected fuzz score
+interface IFileSystem {
+  read(path: string): Promise<string>;
+  write(path: string, content: string): Promise<void>;
+  delete(path: string): Promise<void>;
+  exists(path: string): Promise<boolean>;
+  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
 }
 ```
 
-This comprehensive documentation ensures clear contracts, security guarantees, and proper usage patterns for the TypeScript Patch Diff module.
+### Custom File System
+
+```typescript
+class CustomFileSystem implements IFileSystem {
+  // Implement methods for your storage backend
+}
+
+const patchDiff = new PatchDiff(new CustomFileSystem(), '/root');
+```
+
+## Performance Considerations
+
+- **Memory efficient**: Streams file content and processes line by line
+- **Context caching**: Reuses canonicalized context for multiple matches
+- **Parallel file operations**: Loads multiple files concurrently when possible
+
+## Best Practices
+
+### Writing Patches
+
+1. **Use unique context**: Choose distinctive code patterns for reliable matching
+2. **Hierarchical markers**: Use `@@` markers for ambiguous locations  
+3. **Test incrementally**: Apply patches in small, verifiable chunks
+
+### Error Recovery
+
+1. **Validate first**: Use `validate()` before `apply()` for safety
+2. **Check fuzz scores**: High fuzz scores may indicate unreliable matches
+3. **Handle conflicts**: Implement retry logic for transient failures
+
+### Security
+
+1. **Validate input**: Always sanitize patch content from external sources
+2. **Limit scope**: Use restrictive root paths to contain operations
+3. **Monitor changes**: Log all file operations for audit trails
+
+## Architecture
+
+The system consists of five main components:
+
+- **PatchDiff**: Main orchestrator class
+- **PatchParser**: Converts V4A text to structured format
+- **ContextFinder**: Locates context within files using fuzzy matching
+- **ChunkApplicator**: Applies changes to file content
+- **SecurityValidator**: Validates paths and prevents security issues
+
+For detailed technical documentation, see `/docs/subsystems/patch-diff.md`.
