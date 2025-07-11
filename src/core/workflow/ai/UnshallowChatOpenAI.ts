@@ -13,7 +13,6 @@ export interface OpenAIModelConfig {
   maxTokens?: number;
   baseURL?: string;
   langfuseId?: string; // Optional Langfuse trace ID
-  structuredOutput?: boolean; // Enable structured output mode (JSON response format)
 }
 
 /**
@@ -43,13 +42,6 @@ export class UnshallowChatOpenAI {
     if (config.baseURL) {
       modelConfig.configuration = {
         baseURL: config.baseURL,
-      };
-    }
-
-    // Enable structured output (JSON response format) if configured
-    if (config.structuredOutput) {
-      modelConfig.modelKwargs = {
-        response_format: { type: 'json_object' }
       };
     }
 
@@ -103,6 +95,7 @@ export class UnshallowChatOpenAI {
     }
 
     try {
+      // Call _generate on the underlying ChatOpenAI model
       const result = await this.chatOpenAI._generate(messages, options || {}, runManager);
       
       if (this.config.langfuseId) {

@@ -17,21 +17,4 @@ export class UnshallowOpenAIChatFactory {
   static createFull(config: Omit<OpenAIModelConfig, 'tier'>): ChatOpenAI {
     return this.create({ ...config, tier: 'full' });
   }
-
-  // Convenience methods for structured output
-  static createStructured(config: OpenAIModelConfig): ChatOpenAI {
-    return this.create({ ...config, structuredOutput: true });
-  }
-
-  static createNanoStructured(config: Omit<OpenAIModelConfig, 'tier'>): ChatOpenAI {
-    return this.create({ ...config, tier: 'nano', structuredOutput: true });
-  }
-
-  static createMiniStructured(config: Omit<OpenAIModelConfig, 'tier'>): ChatOpenAI {
-    return this.create({ ...config, tier: 'mini', structuredOutput: true });
-  }
-
-  static createFullStructured(config: Omit<OpenAIModelConfig, 'tier'>): ChatOpenAI {
-    return this.create({ ...config, tier: 'full', structuredOutput: true });
-  }
 }

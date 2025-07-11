@@ -1,6 +1,6 @@
 # AI Module - Unshallow OpenAI Chat Factory
 
-This module provides a factory for creating custom ChatOpenAI models that extend LangChain's functionality with configuration management, Langfuse tracking integration, and structured output support.
+This module provides a factory for creating custom ChatOpenAI models that extend LangChain's functionality with configuration management and Langfuse tracking integration.
 
 ## Usage
 
@@ -42,13 +42,6 @@ const fullModel = UnshallowOpenAIChatFactory.create({
   langfuseId: 'trace-123',
   temperature: 0.7
 });
-
-// Create a model with structured output (JSON response format)
-const structuredModel = UnshallowOpenAIChatFactory.create({
-  apiKey: envConfig.apiKeys.openai,
-  tier: 'mini',
-  structuredOutput: true
-});
 ```
 
 ### Convenience Methods
@@ -64,17 +57,6 @@ const mini = UnshallowOpenAIChatFactory.createMini({
 const full = UnshallowOpenAIChatFactory.createFull({
   apiKey: envConfig.apiKeys.openai
 });
-
-// Create structured output models
-const structuredNano = UnshallowOpenAIChatFactory.createNanoStructured({
-  apiKey: envConfig.apiKeys.openai
-});
-const structuredMini = UnshallowOpenAIChatFactory.createMiniStructured({
-  apiKey: envConfig.apiKeys.openai
-});
-const structuredFull = UnshallowOpenAIChatFactory.createFullStructured({
-  apiKey: envConfig.apiKeys.openai
-});
 ```
 
 ## Model Tiers
@@ -84,21 +66,6 @@ const structuredFull = UnshallowOpenAIChatFactory.createFullStructured({
 - **full**: `gpt-4o` - Most capable for complex tasks (temp: 0.1, tokens: 32768)
 
 ## Features
-
-### Structured Output
-
-Enable structured output (JSON response format) by setting `structuredOutput: true`:
-
-```typescript
-const model = UnshallowOpenAIChatFactory.create({
-  apiKey: envConfig.apiKeys.openai,
-  structuredOutput: true
-});
-
-// The model will now return JSON-formatted responses
-const response = await model.invoke("List 3 colors in JSON format");
-// Response will be guaranteed to be valid JSON
-```
 
 ### Langfuse Tracking
 
@@ -111,6 +78,32 @@ const model = UnshallowOpenAIChatFactory.create({
 });
 
 // All invocations will be tracked with the provided trace ID
+```
+
+### Structured Output
+
+For structured output, use LangChain's built-in `.withStructuredOutput()` method:
+
+```typescript
+import { z } from 'zod';
+
+const model = UnshallowOpenAIChatFactory.create({
+  apiKey: envConfig.apiKeys.openai
+});
+
+// Define a schema
+const responseSchema = z.object({
+  answer: z.number(),
+  explanation: z.string()
+});
+
+// Create structured model
+const structuredModel = model.withStructuredOutput(responseSchema);
+
+// Use the structured model
+const response = await structuredModel.invoke("What is 2+2?");
+console.log(response.answer); // number
+console.log(response.explanation); // string
 ```
 
 ## Integration with LangChain
@@ -150,7 +143,6 @@ for await (const chunk of stream) {
 | `maxTokens` | `number` | Maximum tokens (defaults by tier) |
 | `baseURL` | `string` | Custom OpenAI API endpoint |
 | `langfuseId` | `string` | Langfuse trace ID for observability |
-| `structuredOutput` | `boolean` | Enable JSON response format |
 
 ## Architecture
 
